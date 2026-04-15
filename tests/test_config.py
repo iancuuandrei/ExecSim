@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from execsim.config import DEFAULT_CONFIG_PATH, load_config, load_project_dotenv
+
+
+def test_default_config_loads() -> None:
+    config = load_config()
+
+    assert DEFAULT_CONFIG_PATH.exists()
+    assert config.project_name == "execution-cost-sim"
+    assert config.symbols == ("AAPL", "MSFT", "NVDA")
+    assert config.start_date.isoformat() == "2026-03-16"
+    assert config.end_date.isoformat() == "2026-04-14"
+    assert config.timezone == "America/New_York"
+    assert config.data_provider == "alpaca"
+    assert config.alpaca_feed == "sip"
+    assert config.alpaca_adjustment == "raw"
+    assert config.default_bar_timeframe == "1min"
+
+
+def test_explicit_config_path_loads() -> None:
+    config = load_config(Path("configs/base.yaml"))
+
+    assert config.data_root == "data"
+    assert config.raw_data_dir == "data/raw/alpaca/minute_bars"
+    assert config.processed_data_dir == "data/processed/alpaca/minute_bars"
+    assert config.manifest_path == "data/processed/alpaca/minute_bars/manifest.csv"
+    assert config.reports_dir == "reports"
+
+
+def test_load_project_dotenv_uses_python_dotenv() -> None:
+    dotenv_path = REPO_ROOT / ".env"
+
+    with patch("execsim.config.load_dotenv", return_value=True) as mock_load_dotenv:
+        loaded = load_project_dotenv(dotenv_path)
+
+    assert loaded is True
+    mock_load_dotenv.assert_called_once_with(dotenv_path=dotenv_path, override=True)

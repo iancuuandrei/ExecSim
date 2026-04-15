@@ -1,3 +1,16 @@
+Metadata-Version: 2.4
+Name: execution-cost-sim
+Version: 0.2.0
+Summary: Educational stock execution-cost simulator with an Alpaca-based minute-bar data pipeline.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: alpaca-py>=0.43.0
+Requires-Dist: pandas>=2.2.0
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: pyarrow>=15.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+
 # execution-cost-sim
 
 `execution-cost-sim` is a student quantitative-finance research repository for studying stock execution quality under a simplified intraday transaction-cost framework. The project is intended to compare benchmark execution styles such as TWAP, VWAP-profile, and POV for large parent orders, with a focus on execution costs and market-impact intuition rather than alpha generation or live trading.
