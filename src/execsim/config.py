@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, time
 from pathlib import Path
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo
@@ -12,6 +12,48 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "base.yaml"
 DEFAULT_DOTENV_PATH = PROJECT_ROOT / ".env"
+
+
+@dataclass(slots=True)
+class TwapSimulationDefaults:
+    symbol: str
+    trade_date: date
+    side: str
+    quantity: int
+    start_time: time
+    end_time: time
+    max_bar_participation_rate: float
+
+    def __post_init__(self) -> None:
+        self.symbol = self.symbol.strip().upper()
+        self.side = self.side.strip().lower()
+
+        if not self.symbol:
+            raise ValueError("demo_twap.symbol must be a non-empty string.")
+        if self.side not in {"buy", "sell"}:
+            raise ValueError("demo_twap.side must be 'buy' or 'sell'.")
+        if self.quantity <= 0:
+            raise ValueError("demo_twap.quantity must be positive.")
+        if self.start_time >= self.end_time:
+            raise ValueError("demo_twap.start_time must be before end_time.")
+        if (
+            self.max_bar_participation_rate < 0
+            or self.max_bar_participation_rate > 1
+        ):
+            raise ValueError(
+                "demo_twap.max_bar_participation_rate must be between 0 and 1."
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "trade_date": self.trade_date.isoformat(),
+            "side": self.side,
+            "quantity": self.quantity,
+            "start_time": self.start_time.isoformat(timespec="minutes"),
+            "end_time": self.end_time.isoformat(timespec="minutes"),
+            "max_bar_participation_rate": self.max_bar_participation_rate,
+        }
 
 
 @dataclass(slots=True)
@@ -31,14 +73,18 @@ class ExecSimConfig:
     reports_dir: str
     default_bar_timeframe: str
     log_level: str
+    demo_twap: TwapSimulationDefaults
 
     @classmethod
     def from_mapping(cls, mapping: Mapping[str, Any]) -> "ExecSimConfig":
+        symbols = _read_required_symbols(mapping, "symbols")
+        start_date = _read_required_date(mapping, "start_date")
+        end_date = _read_required_date(mapping, "end_date")
         config = cls(
             project_name=_read_required_string(mapping, "project_name"),
-            symbols=_read_required_symbols(mapping, "symbols"),
-            start_date=_read_required_date(mapping, "start_date"),
-            end_date=_read_required_date(mapping, "end_date"),
+            symbols=symbols,
+            start_date=start_date,
+            end_date=end_date,
             timezone=_read_required_string(mapping, "timezone"),
             data_provider=_read_required_string(mapping, "data_provider"),
             alpaca_feed=_read_required_string(mapping, "alpaca_feed"),
@@ -50,6 +96,11 @@ class ExecSimConfig:
             reports_dir=_read_required_string(mapping, "reports_dir"),
             default_bar_timeframe=_read_required_string(mapping, "default_bar_timeframe"),
             log_level=_read_required_string(mapping, "log_level"),
+            demo_twap=_read_twap_simulation_defaults(
+                mapping=mapping,
+                symbols=symbols,
+                default_trade_date=start_date,
+            ),
         )
         config._validate()
         return config
@@ -71,6 +122,7 @@ class ExecSimConfig:
             "reports_dir": self.reports_dir,
             "default_bar_timeframe": self.default_bar_timeframe,
             "log_level": self.log_level,
+            "demo_twap": self.demo_twap.to_dict(),
         }
 
     @property
@@ -108,6 +160,12 @@ class ExecSimConfig:
 
         if self.data_provider.lower() != "alpaca":
             raise ValueError("This iteration only supports data_provider=alpaca.")
+
+        if self.demo_twap.symbol not in self.symbols:
+            raise ValueError("demo_twap.symbol must be included in symbols.")
+
+        if not self.start_date <= self.demo_twap.trade_date <= self.end_date:
+            raise ValueError("demo_twap.trade_date must be within the configured date range.")
 
 
 def load_config(path: str | Path | None = None) -> ExecSimConfig:
@@ -185,3 +243,103 @@ def _read_required_date(mapping: Mapping[str, Any], key: str) -> date:
             raise ValueError(f"Invalid ISO date for config value: {key}") from exc
 
     raise ValueError(f"Missing required config value: {key}")
+
+
+def _read_twap_simulation_defaults(
+    mapping: Mapping[str, Any],
+    symbols: tuple[str, ...],
+    default_trade_date: date,
+) -> TwapSimulationDefaults:
+    raw_defaults = mapping.get("demo_twap", {})
+    if raw_defaults is None:
+        raw_defaults = {}
+    if not isinstance(raw_defaults, Mapping):
+        raise ValueError("demo_twap must be a mapping when provided.")
+
+    return TwapSimulationDefaults(
+        symbol=_read_optional_string(raw_defaults, "symbol", symbols[0]),
+        trade_date=_read_optional_date(raw_defaults, "trade_date", default_trade_date),
+        side=_read_optional_string(raw_defaults, "side", "buy"),
+        quantity=_read_optional_positive_int(raw_defaults, "quantity", 1000),
+        start_time=_read_optional_time(raw_defaults, "start_time", time(10, 0)),
+        end_time=_read_optional_time(raw_defaults, "end_time", time(11, 0)),
+        max_bar_participation_rate=_read_optional_participation_rate(
+            raw_defaults,
+            "max_bar_participation_rate",
+            0.05,
+        ),
+    )
+
+
+def _read_optional_string(
+    mapping: Mapping[str, Any],
+    key: str,
+    default: str,
+) -> str:
+    value = mapping.get(key, default)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Invalid string config value: {key}")
+    return value
+
+
+def _read_optional_date(
+    mapping: Mapping[str, Any],
+    key: str,
+    default: date,
+) -> date:
+    value = mapping.get(key, default)
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid ISO date for config value: {key}") from exc
+    raise ValueError(f"Invalid date config value: {key}")
+
+
+def _read_optional_time(
+    mapping: Mapping[str, Any],
+    key: str,
+    default: time,
+) -> time:
+    value = mapping.get(key, default)
+    if isinstance(value, time):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed_time = time.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid ISO time for config value: {key}") from exc
+        if parsed_time.tzinfo is not None:
+            raise ValueError(f"Config time value {key} must be timezone-naive.")
+        return parsed_time
+    raise ValueError(f"Invalid time config value: {key}")
+
+
+def _read_optional_positive_int(
+    mapping: Mapping[str, Any],
+    key: str,
+    default: int,
+) -> int:
+    value = mapping.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"Invalid integer config value: {key}")
+    if value <= 0:
+        raise ValueError(f"Config value {key} must be positive.")
+    return value
+
+
+def _read_optional_participation_rate(
+    mapping: Mapping[str, Any],
+    key: str,
+    default: float,
+) -> float:
+    value = mapping.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, (float, int)):
+        raise ValueError(f"Invalid participation-rate config value: {key}")
+
+    rate = float(value)
+    if rate < 0 or rate > 1:
+        raise ValueError(f"Config value {key} must be between 0 and 1.")
+    return rate

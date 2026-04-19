@@ -16,3 +16,11 @@ manifest_path: data/processed/alpaca/minute_bars/manifest.csv
 reports_dir: reports
 default_bar_timeframe: 1min
 log_level: INFO
+demo_twap:
+  symbol: AAPL
+  trade_date: 2026-03-16
+  side: buy
+  quantity: 5000
+  start_time: "10:00"
+  end_time: "10:30"
+  max_bar_participation_rate: 0.05

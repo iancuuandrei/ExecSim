@@ -26,6 +26,13 @@ def test_default_config_loads() -> None:
     assert config.alpaca_feed == "sip"
     assert config.alpaca_adjustment == "raw"
     assert config.default_bar_timeframe == "1min"
+    assert config.demo_twap.symbol == "AAPL"
+    assert config.demo_twap.trade_date.isoformat() == "2026-03-16"
+    assert config.demo_twap.side == "buy"
+    assert config.demo_twap.quantity == 5000
+    assert config.demo_twap.start_time.strftime("%H:%M") == "10:00"
+    assert config.demo_twap.end_time.strftime("%H:%M") == "10:30"
+    assert config.demo_twap.max_bar_participation_rate == 0.05
 
 
 def test_explicit_config_path_loads() -> None:
