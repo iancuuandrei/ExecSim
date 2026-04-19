@@ -25,6 +25,7 @@ Current iteration = `Iteration 2`
 - Simulation summary with fill completion, average fill price, and realized participation
 - Smoke, config, cleaning, and validation tests
 - Focused TWAP scheduling and simulator behavior tests
+- Current implementation specifications in `docs/SPECIFICATIONS.md`
 - Durable project context and implementation log documents
 - Placeholder directories for future data, notebook, and report artifacts
 
@@ -56,6 +57,7 @@ Current iteration = `Iteration 2`
 - `2026-04-15`: Created Iteration 0 bootstrap with package scaffold, CLI, YAML config loader, tests, README, and durable docs.
 - `2026-04-15`: Added Iteration 1 data ingestion, cleaning, validation, processed Parquet output, and dataset manifest generation for Alpaca minute bars.
 - `2026-04-19`: Added Iteration 2 parent-order model, TWAP scheduler, processed-window loader, basic simulator loop, execution log, summary object, `simulate-twap` CLI command, and focused tests.
+- `2026-04-19`: Added `docs/SPECIFICATIONS.md` as a living implementation contract for the config, data pipeline, order model, TWAP scheduler, simulator, CLI, tests, and current non-goals.
 
 ## Maintenance Rule
 

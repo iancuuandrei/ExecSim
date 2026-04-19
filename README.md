@@ -27,7 +27,8 @@ This repository is at `Iteration 2`: a minimal end-to-end TWAP simulator on top 
 |   `-- raw/
 |-- docs/
 |   |-- IMPLEMENTATION_LOG.md
-|   `-- PROJECT_CONTEXT.md
+|   |-- PROJECT_CONTEXT.md
+|   `-- SPECIFICATIONS.md
 |-- notebooks/
 |-- reports/
 |-- src/
@@ -73,6 +74,12 @@ pytest
 ```
 
 The installed console script `execsim --help` is also available after editable install.
+
+## Documentation
+
+- `docs/PROJECT_CONTEXT.md`: stable project contract and roadmap intent
+- `docs/SPECIFICATIONS.md`: current implementation contracts and behavior
+- `docs/IMPLEMENTATION_LOG.md`: iteration history and current repo state
 
 ## Data Pipeline
 
