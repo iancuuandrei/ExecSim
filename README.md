@@ -4,7 +4,7 @@
 
 ## Current Status
 
-This repository is at `Iteration 2`: a minimal end-to-end TWAP simulator on top of processed minute bars.
+This repository is at `Iteration 3`: a minimal TWAP simulator with basic TCA metrics on top of processed minute bars.
 
 - Minimal `src/` Python package
 - Config-driven Alpaca minute-bar download pipeline
@@ -13,6 +13,7 @@ This repository is at `Iteration 2`: a minimal end-to-end TWAP simulator on top 
 - Parent order and single-day execution-window models
 - Minimal TWAP scheduler with integer child quantities
 - Simulation loop with per-bar participation caps and fill-price logging
+- Arrival, session VWAP, implementation-shortfall, VWAP-slippage, and filled-notional metrics
 - Smoke, config, cleaning, and validation tests
 - Durable project context and implementation log documents
 
@@ -110,7 +111,7 @@ python -m execsim.cli build-manifest
 
 ## TWAP Simulation
 
-Iteration 2 adds one runnable simulator command:
+Iteration 2 added one runnable simulator command, and Iteration 3 extends its summary with basic TCA metrics:
 
 ```bash
 python -m execsim.cli simulate-twap
@@ -122,14 +123,22 @@ By default, this uses the small `demo_twap` block in `configs/base.yaml`. You ca
 python -m execsim.cli simulate-twap --symbol AAPL --trade-date 2026-03-16 --side buy --quantity 5000 --start-time 10:00 --end-time 10:30 --max-bar-participation-rate 0.05
 ```
 
-The simulator loads processed per-symbol Parquet data, slices one trade date and one intraday window, builds a fixed TWAP schedule, applies a per-bar participation cap, and prints a summary plus the first few execution-log rows.
+For machine-readable output:
+
+```bash
+python -m execsim.cli simulate-twap --json
+```
+
+The simulator loads processed per-symbol Parquet data, slices one trade date for the session benchmark, slices one intraday execution window for fills, builds a fixed TWAP schedule, applies a per-bar participation cap, and prints a summary plus the first few execution-log rows.
+
+Current summary metrics include fill completion, realized participation, arrival price, session VWAP, implementation shortfall in bps, VWAP slippage in bps, and filled notional. Arrival and session VWAP are bar-based benchmarks using bar `vwap` when available and an OHLC average fallback otherwise.
 
 ## Roadmap
 
 - Iteration 0: bootstrap repository, config system, CLI, tests, and project docs
 - Iteration 1: package the Alpaca ingestion, cleaning, validation, and manifest workflow
 - Iteration 2: add parent-order representation, TWAP scheduling, and a minimal processed-bar simulator
-- Iteration 3: add transaction-cost accounting and comparison metrics
+- Iteration 3: add arrival, session VWAP, implementation-shortfall, VWAP-slippage, and filled-notional metrics
 - Iteration 4: add experiment workflows, reporting outputs, and validation checks
 
 ## Disclaimer

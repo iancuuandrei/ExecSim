@@ -36,6 +36,7 @@ def test_cli_help_runs() -> None:
     assert "download-data" in result.stdout
     assert "build-manifest" in result.stdout
     assert "validate-data" in result.stdout
+    assert "simulate-twap" in result.stdout
 
 
 def test_cli_smoke_runs() -> None:

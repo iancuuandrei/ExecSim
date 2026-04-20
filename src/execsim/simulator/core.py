@@ -42,6 +42,7 @@ def simulate_order(
     max_bar_participation_rate: float,
 ) -> SimulationResult:
     _validate_participation_rate(max_bar_participation_rate)
+    session_bars = _prepare_session_bars(parent_order, bars)
     window_bars = _prepare_window_bars(parent_order, bars)
     schedule = strategy.generate_schedule(parent_order, window_bars)
     scheduled_quantities = _extract_scheduled_quantities(schedule, len(window_bars))
@@ -81,6 +82,19 @@ def simulate_order(
     average_fill_price = (
         weighted_fill_notional / filled_qty if filled_qty > 0 else None
     )
+    arrival_price = _arrival_price(window_bars)
+    session_vwap = _session_vwap(session_bars)
+    side_multiplier = _side_multiplier(parent_order.side)
+    implementation_shortfall_bps = _signed_slippage_bps(
+        average_fill_price,
+        arrival_price,
+        side_multiplier,
+    )
+    vwap_slippage_bps = _signed_slippage_bps(
+        average_fill_price,
+        session_vwap,
+        side_multiplier,
+    )
 
     summary = SimulationSummary(
         symbol=parent_order.symbol,
@@ -89,6 +103,11 @@ def simulate_order(
         filled_qty=filled_qty,
         unfilled_qty=parent_order.quantity - filled_qty,
         average_fill_price=average_fill_price,
+        arrival_price=arrival_price,
+        session_vwap=session_vwap,
+        implementation_shortfall_bps=implementation_shortfall_bps,
+        vwap_slippage_bps=vwap_slippage_bps,
+        filled_notional=weighted_fill_notional,
         completion_rate=filled_qty / parent_order.quantity,
         realized_participation=(
             filled_qty / total_window_volume if total_window_volume > 0 else 0.0
@@ -106,6 +125,35 @@ def _validate_participation_rate(value: float) -> None:
         raise TypeError("max_bar_participation_rate must be numeric.")
     if value < 0 or value > 1:
         raise ValueError("max_bar_participation_rate must be between 0 and 1.")
+
+
+def _prepare_session_bars(parent_order: ParentOrder, bars: pd.DataFrame) -> pd.DataFrame:
+    missing_columns = [
+        column for column in REQUIRED_SIMULATION_COLUMNS if column not in bars.columns
+    ]
+    if missing_columns:
+        raise ValueError(f"Simulation bars missing required columns: {missing_columns}")
+
+    prepared = bars.copy()
+    prepared["timestamp"] = pd.to_datetime(prepared["timestamp"])
+
+    if "symbol" in prepared.columns:
+        symbol_mask = prepared["symbol"].astype(str).str.upper() == parent_order.symbol
+        prepared = prepared.loc[symbol_mask].copy()
+
+    prepared = (
+        prepared.loc[prepared["timestamp"].dt.date == parent_order.trade_date]
+        .sort_values("timestamp", kind="stable")
+        .reset_index(drop=True)
+    )
+
+    if prepared.empty:
+        raise ValueError(
+            "No processed bars found for "
+            f"{parent_order.symbol} on {parent_order.trade_date.isoformat()}."
+        )
+
+    return prepared
 
 
 def _prepare_window_bars(parent_order: ParentOrder, bars: pd.DataFrame) -> pd.DataFrame:
@@ -159,6 +207,44 @@ def _extract_scheduled_quantities(schedule: pd.DataFrame, expected_length: int) 
 
 
 def _resolve_fill_price(row: pd.Series) -> float:
+    return _bar_price(row)
+
+
+def _arrival_price(window_bars: pd.DataFrame) -> float:
+    return _bar_price(window_bars.iloc[0])
+
+
+def _session_vwap(session_bars: pd.DataFrame) -> float | None:
+    total_volume = float(session_bars["volume"].sum())
+    if total_volume <= 0:
+        return None
+
+    weighted_notional = sum(
+        float(row["volume"]) * _bar_price(row)
+        for _, row in session_bars.iterrows()
+    )
+    return weighted_notional / total_volume
+
+
+def _signed_slippage_bps(
+    execution_price: float | None,
+    benchmark_price: float | None,
+    side_multiplier: int,
+) -> float | None:
+    if execution_price is None or benchmark_price is None or benchmark_price == 0:
+        return None
+    return 10_000 * side_multiplier * (execution_price - benchmark_price) / benchmark_price
+
+
+def _side_multiplier(side: str) -> int:
+    if side == "buy":
+        return 1
+    if side == "sell":
+        return -1
+    raise ValueError("Side must be 'buy' or 'sell'.")
+
+
+def _bar_price(row: pd.Series) -> float:
     vwap = row.get("vwap")
     if vwap is not None and not pd.isna(vwap):
         return float(vwap)

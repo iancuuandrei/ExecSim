@@ -2,7 +2,7 @@
 
 ## Current Iteration
 
-Current iteration = `Iteration 2`
+Current iteration = `Iteration 3`
 
 ## What Exists Now
 
@@ -23,8 +23,11 @@ Current iteration = `Iteration 2`
 - Fill-price rule using bar `vwap` with OHLC average fallback
 - Structured execution log with scheduled quantity, cap, fill quantity, bar volume, and fill price
 - Simulation summary with fill completion, average fill price, and realized participation
+- TCA summary metrics for arrival price, session VWAP, implementation shortfall in bps, VWAP slippage in bps, and filled notional
+- `simulate-twap --json` output mode for reproducible machine-readable summaries
 - Smoke, config, cleaning, and validation tests
 - Focused TWAP scheduling and simulator behavior tests
+- Focused TCA metric tests for side-aware shortfall signs, arrival benchmark, session VWAP, partial fills, and zero fills
 - Current implementation specifications in `docs/SPECIFICATIONS.md`
 - Durable project context and implementation log documents
 - Placeholder directories for future data, notebook, and report artifacts
@@ -36,7 +39,7 @@ Current iteration = `Iteration 2`
 - No VWAP-profile strategy
 - No adaptive strategy
 - No market-impact overlay
-- No implementation shortfall report
+- No standalone implementation shortfall report beyond the simulator summary fields
 - No experiment runner
 - No plotting, dashboard, or notebook analysis workflow
 - No order-book or quote simulation
@@ -45,12 +48,11 @@ Current iteration = `Iteration 2`
 
 ## Next Planned Iteration
 
-`Iteration 3` should add simplified execution-quality and transaction-cost accounting:
+`Iteration 4` should add experiment workflow and comparison outputs:
 
-- Arrival-price reference handling
-- Implementation-shortfall calculations in currency units and basis points
-- Slippage versus simple intraday references such as arrival price or session VWAP
-- Keep the existing TWAP simulator small and preserve the processed-data pipeline
+- Small config-driven runs over multiple symbols, dates, or parent-order settings
+- Lightweight tabular outputs suitable for comparing completed simulations
+- Preserve the existing processed-data pipeline and avoid plotting or dashboard work until the research loop is stable
 
 ## Changelog
 
@@ -58,6 +60,7 @@ Current iteration = `Iteration 2`
 - `2026-04-15`: Added Iteration 1 data ingestion, cleaning, validation, processed Parquet output, and dataset manifest generation for Alpaca minute bars.
 - `2026-04-19`: Added Iteration 2 parent-order model, TWAP scheduler, processed-window loader, basic simulator loop, execution log, summary object, `simulate-twap` CLI command, and focused tests.
 - `2026-04-19`: Added `docs/SPECIFICATIONS.md` as a living implementation contract for the config, data pipeline, order model, TWAP scheduler, simulator, CLI, tests, and current non-goals.
+- `2026-04-20`: Added Iteration 3 TCA metrics to the TWAP simulator summary: arrival price, session VWAP, implementation shortfall in bps, VWAP slippage in bps, filled notional, concise CLI reporting, optional JSON output, and focused metric tests.
 
 ## Maintenance Rule
 

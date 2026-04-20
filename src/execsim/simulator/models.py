@@ -25,6 +25,11 @@ class SimulationSummary:
     filled_qty: int
     unfilled_qty: int
     average_fill_price: float | None
+    arrival_price: float
+    session_vwap: float | None
+    implementation_shortfall_bps: float | None
+    vwap_slippage_bps: float | None
+    filled_notional: float
     completion_rate: float
     realized_participation: float
     start_timestamp: pd.Timestamp

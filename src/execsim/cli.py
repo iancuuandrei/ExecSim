@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from datetime import date, time
+import json
 from pathlib import Path
 
 import yaml
@@ -87,6 +88,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Per-bar cap as a fraction of observed bar volume.",
     )
+    simulate_twap_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print a JSON summary plus execution-log head.",
+    )
 
     return parser
 
@@ -159,7 +165,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if all(report.is_valid for report in reports) else 1
 
     if args.command == "simulate-twap":
-        from execsim.data.loaders import load_processed_window_bars
+        from execsim.data.loaders import load_processed_symbol_day_bars
         from execsim.simulator import simulate_twap
 
         config = load_config(args.config)
@@ -168,12 +174,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (argparse.ArgumentTypeError, TypeError, ValueError) as exc:
             parser.error(str(exc))
         try:
-            bars = load_processed_window_bars(
+            bars = load_processed_symbol_day_bars(
                 config=config,
                 symbol=order.symbol,
                 trade_date=order.trade_date,
-                start_time=order.start_time,
-                end_time=order.end_time,
             )
             result = simulate_twap(
                 parent_order=order,
@@ -182,7 +186,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (FileNotFoundError, TypeError, ValueError) as exc:
             parser.error(str(exc))
-        _print_simulation_result(result)
+        _print_simulation_result(result, as_json=args.json)
         return 0
 
     parser.error(f"Unknown command: {args.command}")
@@ -253,8 +257,12 @@ def _parse_time(value: str) -> time:
     return parsed_time
 
 
-def _print_simulation_result(result) -> None:
+def _print_simulation_result(result, as_json: bool = False) -> None:
     summary = result.summary
+    if as_json:
+        print(json.dumps(_simulation_result_payload(result), indent=2, default=str))
+        return
+
     average_price = (
         f"{summary.average_fill_price:.4f}"
         if summary.average_fill_price is not None
@@ -275,8 +283,53 @@ def _print_simulation_result(result) -> None:
         f"| realized_participation={summary.realized_participation:.6f} "
         f"| average_fill_price={average_price}"
     )
+    print(
+        f"arrival_price={_format_optional_float(summary.arrival_price)} "
+        f"| session_vwap={_format_optional_float(summary.session_vwap)} "
+        f"| filled_notional={summary.filled_notional:.2f} "
+        f"| implementation_shortfall_bps="
+        f"{_format_optional_float(summary.implementation_shortfall_bps)} "
+        f"| vwap_slippage_bps={_format_optional_float(summary.vwap_slippage_bps)}"
+    )
     print("execution_log_head:")
     print(result.execution_log.head().to_string(index=False))
+
+
+def _format_optional_float(value: float | None, decimals: int = 4) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.{decimals}f}"
+
+
+def _simulation_result_payload(result) -> dict[str, object]:
+    summary = result.summary
+    execution_log_head = result.execution_log.head().copy()
+    if not execution_log_head.empty:
+        execution_log_head["timestamp"] = execution_log_head["timestamp"].map(
+            lambda value: value.isoformat() if hasattr(value, "isoformat") else str(value)
+        )
+
+    return {
+        "summary": {
+            "symbol": summary.symbol,
+            "side": summary.side,
+            "requested_qty": summary.requested_qty,
+            "filled_qty": summary.filled_qty,
+            "unfilled_qty": summary.unfilled_qty,
+            "average_fill_price": summary.average_fill_price,
+            "arrival_price": summary.arrival_price,
+            "session_vwap": summary.session_vwap,
+            "implementation_shortfall_bps": summary.implementation_shortfall_bps,
+            "vwap_slippage_bps": summary.vwap_slippage_bps,
+            "filled_notional": summary.filled_notional,
+            "completion_rate": summary.completion_rate,
+            "realized_participation": summary.realized_participation,
+            "start_timestamp": summary.start_timestamp.isoformat(),
+            "end_timestamp": summary.end_timestamp.isoformat(),
+            "n_bars_in_window": summary.n_bars_in_window,
+        },
+        "execution_log_head": execution_log_head.to_dict(orient="records"),
+    }
 
 
 if __name__ == "__main__":

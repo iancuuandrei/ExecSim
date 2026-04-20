@@ -2,11 +2,11 @@
 
 This document records the current implementation contracts for future contributors. It is subordinate to `docs/PROJECT_CONTEXT.md`, which remains the stable project contract, and should be updated whenever code behavior changes.
 
-Current coverage: Iterations 0 through 2.
+Current coverage: Iterations 0 through 3.
 
 ## System Purpose
 
-`execution-cost-sim` is an offline, single-asset educational simulator for studying parent-order execution over intraday minute-bar data. The current system can download and normalize historical bars, validate processed datasets, and run a minimal TWAP simulation for one symbol on one trade date over one intraday window.
+`execution-cost-sim` is an offline, single-asset educational simulator for studying parent-order execution over intraday minute-bar data. The current system can download and normalize historical bars, validate processed datasets, and run a minimal TWAP simulation with basic TCA metrics for one symbol on one trade date over one intraday window.
 
 The project is not a live trading system, brokerage connector, order router, high-frequency market simulator, or alpha model.
 
@@ -148,7 +148,7 @@ Window slicing semantics:
 - end time is exclusive
 - output is sorted by timestamp and reset to a zero-based index
 
-The simulator can also slice bars internally, but CLI use should load an already sliced processed window.
+The simulator can also slice bars internally. CLI simulation loads the full processed symbol-day so the execution window can be used for fills while the same-day bars can be used for the session VWAP benchmark.
 
 ## Parent Order Specification
 
@@ -246,6 +246,11 @@ Required simulation bar columns:
 
 If a `symbol` column is present, rows are filtered to the parent order symbol.
 
+The simulator expects processed bars for the relevant symbol-day. It uses:
+
+- all same-day bars passed into the simulator for `session_vwap`
+- execution-window bars for TWAP scheduling, fills, arrival price, and realized participation
+
 Window filter:
 
 - `timestamp.dt.date == parent_order.trade_date`
@@ -269,6 +274,19 @@ Fill price:
 - otherwise use `(open + high + low + close) / 4`
 
 The simulator records one execution-log row per bar in the execution window, including bars with zero fill.
+
+Arrival price:
+
+- use the first executable bar in the execution window
+- use bar `vwap` when present and non-null
+- otherwise use `(open + high + low + close) / 4`
+
+Session VWAP:
+
+- use all same-symbol, same-date bars supplied to the simulator
+- weight each bar price by `volume`
+- each bar price uses `vwap` when present and non-null
+- otherwise it falls back to `(open + high + low + close) / 4`
 
 ## Execution Log Specification
 
@@ -299,6 +317,11 @@ Fields:
 - `filled_qty`
 - `unfilled_qty`
 - `average_fill_price`
+- `arrival_price`
+- `session_vwap`
+- `implementation_shortfall_bps`
+- `vwap_slippage_bps`
+- `filled_notional`
 - `completion_rate`
 - `realized_participation`
 - `start_timestamp`
@@ -309,13 +332,21 @@ Definitions:
 
 ```text
 average_fill_price = sum(filled_qty_i * fill_price_i) / sum(filled_qty_i)
+filled_notional = sum(filled_qty_i * fill_price_i)
 completion_rate = filled_qty / requested_qty
 realized_participation = filled_qty / sum(bar_volume over execution window)
+implementation_shortfall_bps = 10000 * s * (average_fill_price - arrival_price) / arrival_price
+vwap_slippage_bps = 10000 * s * (average_fill_price - session_vwap) / session_vwap
 ```
+
+where `s = +1` for buys and `s = -1` for sells.
 
 If no shares are filled:
 
 - `average_fill_price` is `None`
+- `filled_notional` is `0.0`
+- `implementation_shortfall_bps` is `None`
+- `vwap_slippage_bps` is `None`
 - `completion_rate` is `0.0`
 - `realized_participation` is `0.0` when window volume is zero, otherwise still `0.0`
 
@@ -345,13 +376,16 @@ All commands accept:
 - `--start-time`
 - `--end-time`
 - `--max-bar-participation-rate`
+- `--json`
 
 If omitted, these values are read from `demo_twap` in the loaded config.
 
 The command prints:
 
-- short TWAP simulation summary
+- short TWAP simulation summary with TCA metrics
 - first few execution-log rows
+
+With `--json`, the command prints a JSON object with `summary` and `execution_log_head`.
 
 Example:
 
@@ -369,6 +403,7 @@ Current test categories:
 - smoke CLI behavior
 - TWAP schedule behavior
 - simulator cap, side, incomplete-fill, and weighted-average behavior
+- TCA metric behavior for side-aware shortfall signs, arrival price, session VWAP, partial fills, and zero fills
 
 Expected full-suite command:
 
@@ -387,8 +422,8 @@ These are intentionally not implemented yet:
 - adaptive strategy behavior
 - market-impact model
 - spread model
-- implementation-shortfall report
-- transaction-cost accounting
+- standalone implementation-shortfall report beyond summary metrics
+- transaction-cost overlays beyond summary TCA metrics
 - experiment runner
 - plotting or dashboard system
 - order-book or quote simulation
