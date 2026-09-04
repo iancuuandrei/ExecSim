@@ -1,67 +1,45 @@
-# Implementation Log
+# Implementation log
 
-## Current Iteration
+## V1 completion pass — 2026-09-04
 
-Current iteration = `Iteration 3`
+The repository advanced from a TWAP-only simulator to the V1 quantitative research framework:
 
-## What Exists Now
+- Established `AGENTS.md`, deterministic manifest navigation, and the living implementation standard.
+- Added point-in-time decision contexts and historical volume forecasts.
+- Added TWAP, historical VWAP, POV, analytical Almgren–Chriss, constrained QP, adaptive MPC, and evaluation-only oracle policies.
+- Added explicit OSQP matrices, feasibility handling, diagnostics, warm starts, and deterministic integer projection.
+- Added side-aware half-spread and linear-in-participation impact with parameter provenance.
+- Expanded execution logs, decision traces, TCA summaries, cost reconciliation, and capacity reporting.
+- Added deterministic liquidity and price scenarios.
+- Added experiment grids, stable run IDs, Parquet/CSV/JSON/Markdown artifacts, figures, bootstrap intervals, paired differences, regimes, and win rates.
+- Added ML feature metadata, point-in-time datasets, calendar filters, checksummed manifests, walk-forward splits, model adapters, training plans, synthetic fitting, inference, and compatibility-checked artifacts.
+- Added a hierarchical CLI, example configurations, Ruff, mypy, pytest, repository-contract checks, and a Python 3.11/3.13 CI matrix.
 
-- Python project bootstrapped with `pyproject.toml`
-- `src/` layout with a minimal `execsim` package
-- CLI commands: `show-config`, `smoke`, `download-data`, `build-manifest`, `validate-data`, and `simulate-twap`
-- YAML config loading from `configs/base.yaml`
-- `execsim.data` package for schema, download, cleaning, validation, loaders, and manifest generation
-- Alpaca environment-variable credential handling via `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`
-- Config-driven multi-symbol minute-bar download parameters
-- Raw per-symbol Parquet storage plus cleaned processed per-symbol Parquet outputs
-- Processed-data validation and manifest CSV generation
-- Parent-order and single-day execution-window dataclasses
-- Minimal TWAP scheduler that produces integer child quantities summing to the parent quantity before caps
-- Processed-bar loader helpers for one symbol, one trade date, and one intraday execution window
-- Basic simulator loop over processed 1-minute bars
-- Per-bar max participation cap using `floor(rate * bar_volume)`
-- Fill-price rule using bar `vwap` with OHLC average fallback
-- Structured execution log with scheduled quantity, cap, fill quantity, bar volume, and fill price
-- Simulation summary with fill completion, average fill price, and realized participation
-- TCA summary metrics for arrival price, session VWAP, implementation shortfall in bps, VWAP slippage in bps, and filled notional
-- `simulate-twap --json` output mode for reproducible machine-readable summaries
-- Smoke, config, cleaning, and validation tests
-- Focused TWAP scheduling and simulator behavior tests
-- Focused TCA metric tests for side-aware shortfall signs, arrival benchmark, session VWAP, partial fills, and zero fills
-- Current implementation specifications in `docs/SPECIFICATIONS.md`
-- Durable project context and implementation log documents
-- Placeholder directories for future data, notebook, and report artifacts
+## Acceptance evidence
 
-## What Does Not Exist Yet
+The completed acceptance checks are:
 
-- No cost model
-- No POV strategy
-- No VWAP-profile strategy
-- No adaptive strategy
-- No market-impact overlay
-- No standalone implementation shortfall report beyond the simulator summary fields
-- No experiment runner
-- No plotting, dashboard, or notebook analysis workflow
-- No order-book or quote simulation
-- No broker order submission or live trading integration
-- No notebook-based research analysis beyond the packaged dataset pipeline
+| Check | Result |
+|---|---|
+| Pre-change test baseline after dependency installation | `PASS` — 23 tests |
+| Final local suite | `PASS` — 67 tests |
+| Coverage report | `PASS`; critical optimization, policy, reporting, artifact, simulation, and partitioned ML paths have focused tests |
+| Fresh-environment editable install and suite | `PASS` — 67 tests, mypy, and Ruff |
+| Ruff lint and format | `PASS` |
+| mypy | `PASS` — 62 source files |
+| Repository manifest contract | `PASS` — 10 areas |
+| Existing AAPL, MSFT, and NVDA sample validation | `PASS` — 8,190 rows per symbol |
+| All six deployable policies on one historical order | `PASS` — each completed 5,000 shares |
+| Historical multi-strategy experiment | `PASS` — run `run-ab075520bd15`, 384 units |
+| Deterministic synthetic scenario | `PASS` — 390 rows |
+| Historical point-in-time ML dataset | `PASS` — 4,680 rows, 60 samples, three symbols |
+| Walk-forward split manifest | `PASS` — two folds for the deliberately small acceptance windows |
+| Historical ML training dry run | `PASS` — emitted cutoff and data-sufficiency warnings without artifacts |
+| Historical ML fitting | `NOT RUN` — prohibited by the controlling task |
+| Synthetic fixture fitting | `PASS` — Ridge, Elastic Net, and histogram gradient boosting in tests only |
 
-## Next Planned Iteration
+No `artifacts/` directory or fitted historical model was created. Generated experiment, scenario, and ML acceptance outputs are ignored research artifacts.
 
-`Iteration 4` should add experiment workflow and comparison outputs:
+## Maintenance rule
 
-- Small config-driven runs over multiple symbols, dates, or parent-order settings
-- Lightweight tabular outputs suitable for comparing completed simulations
-- Preserve the existing processed-data pipeline and avoid plotting or dashboard work until the research loop is stable
-
-## Changelog
-
-- `2026-04-15`: Created Iteration 0 bootstrap with package scaffold, CLI, YAML config loader, tests, README, and durable docs.
-- `2026-04-15`: Added Iteration 1 data ingestion, cleaning, validation, processed Parquet output, and dataset manifest generation for Alpaca minute bars.
-- `2026-04-19`: Added Iteration 2 parent-order model, TWAP scheduler, processed-window loader, basic simulator loop, execution log, summary object, `simulate-twap` CLI command, and focused tests.
-- `2026-04-19`: Added `docs/SPECIFICATIONS.md` as a living implementation contract for the config, data pipeline, order model, TWAP scheduler, simulator, CLI, tests, and current non-goals.
-- `2026-04-20`: Added Iteration 3 TCA metrics to the TWAP simulator summary: arrival price, session VWAP, implementation shortfall in bps, VWAP slippage in bps, filled notional, concise CLI reporting, optional JSON output, and focused metric tests.
-
-## Maintenance Rule
-
-Every future Codex iteration that changes repository scope, code, configuration, or workflow assumptions must update this file before the task is considered complete.
+Update this log when a milestone changes repository capability or evidence. Update `docs/standards/implementation.md` in the same change whenever a material engineering direction changes.

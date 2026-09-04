@@ -1,0 +1,20 @@
+project_config: configs/base.yaml
+experiment:
+  symbols: [AAPL, MSFT]
+  trade_dates: [2026-03-23, 2026-03-24]
+  quantities: [1000, 5000]
+  sides: [buy, sell]
+  strategies: [twap, vwap, pov, almgren-chriss, optimal, mpc]
+  start_time: "10:00"
+  end_time: "11:00"
+  planned_participation_rate: 0.10
+  hard_participation_rate: 0.10
+  pov_target_rate: 0.05
+  half_spread: 0.01
+  temporary_impacts: [0.05, 0.10]
+  volatility: 0.01
+  risk_aversions: [0.0, 0.01]
+  profile_estimator: mean
+  profile_lookback_sessions: 5
+  seed: 17
+  include_oracle: false

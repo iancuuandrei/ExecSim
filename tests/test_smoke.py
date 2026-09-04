@@ -13,9 +13,7 @@ def _test_env() -> dict[str, str]:
     src_path = str(REPO_ROOT / "src")
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
-        src_path
-        if not existing_pythonpath
-        else os.pathsep.join([src_path, existing_pythonpath])
+        src_path if not existing_pythonpath else os.pathsep.join([src_path, existing_pythonpath])
     )
     return env
 

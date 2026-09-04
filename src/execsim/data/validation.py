@@ -4,7 +4,11 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from execsim.data.schema import FULL_TRADING_DAY_BAR_COUNT, REQUIRED_COLUMNS, REQUIRED_NON_NULL_COLUMNS
+from execsim.data.schema import (
+    FULL_TRADING_DAY_BAR_COUNT,
+    REQUIRED_COLUMNS,
+    REQUIRED_NON_NULL_COLUMNS,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,9 +97,7 @@ def validate_processed_bars(bars: pd.DataFrame, symbol: str | None = None) -> Va
     ordered = bars.sort_values("timestamp", kind="stable").reset_index(drop=True)
     duplicate_timestamps = int(ordered["timestamp"].duplicated().sum())
     timestamp_deltas = ordered["timestamp"].diff()
-    non_increasing_timestamps = int(
-        timestamp_deltas.iloc[1:].le(pd.Timedelta(0)).sum()
-    )
+    non_increasing_timestamps = int(timestamp_deltas.iloc[1:].le(pd.Timedelta(0)).sum())
 
     missing_required_values = {
         column: int(ordered[column].isna().sum()) for column in REQUIRED_NON_NULL_COLUMNS

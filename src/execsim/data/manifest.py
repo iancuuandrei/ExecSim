@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
 from execsim.config import ExecSimConfig
@@ -54,8 +52,8 @@ def _build_manifest_row(symbol: str, bars: pd.DataFrame) -> dict[str, object]:
         "symbol": symbol,
         "first_timestamp": ordered["timestamp"].iloc[0].isoformat(),
         "last_timestamp": ordered["timestamp"].iloc[-1].isoformat(),
-        "n_rows": int(len(ordered)),
-        "n_days": int(len(day_summaries)),
+        "n_rows": len(ordered),
+        "n_days": len(day_summaries),
         "n_full_days_390": int(sum(item.is_full_day for item in day_summaries)),
         "min_date": session_dates.min().isoformat(),
         "max_date": session_dates.max().isoformat(),

@@ -19,8 +19,7 @@ class TwapStrategy:
         base_quantity = parent_order.quantity // n_bars
         remainder = parent_order.quantity % n_bars
         scheduled_quantities = [
-            base_quantity + (1 if index < remainder else 0)
-            for index in range(n_bars)
+            base_quantity + (1 if index < remainder else 0) for index in range(n_bars)
         ]
 
         return pd.DataFrame(

@@ -1,440 +1,106 @@
-# Execution Cost Simulator Specifications
+# ExecSim implementation specifications
 
-This document records the current implementation contracts for future contributors. It is subordinate to `docs/PROJECT_CONTEXT.md`, which remains the stable project contract, and should be updated whenever code behavior changes.
+This document defines implemented V1 behavior. The focused mathematical, point-in-time, ML, and writing contracts linked here are normative. Code and documentation changes must update the applicable contract in the same change.
 
-Current coverage: Iterations 0 through 3.
+## System boundary
 
-## System Purpose
+ExecSim simulates one equity parent order on one local-market session using timezone-aware minute bars. It accepts policy decisions, enforces inventory and participation constraints, applies a cost model, and produces an execution log, decision trace, and summary. It does not submit orders, mutate source bars, predict returns, model an order book, or infer live performance.
 
-`execution-cost-sim` is an offline, single-asset educational simulator for studying parent-order execution over intraday minute-bar data. The current system can download and normalize historical bars, validate processed datasets, and run a minimal TWAP simulation with basic TCA metrics for one symbol on one trade date over one intraday window.
+## Public substitution boundaries
 
-The project is not a live trading system, brokerage connector, order router, high-frequency market simulator, or alpha model.
+The framework exposes typed protocols:
 
-## Package And Runtime
+| Protocol | Responsibility |
+|---|---|
+| `SchedulingPolicy` | Create one static integer schedule from a `ParentOrder` and `DecisionContext` |
+| `AdaptiveExecutionPolicy` | Reset state and choose one current-bucket quantity per causal decision |
+| `ExecutionCostModel` | Quote a side-aware execution price and cost attribution for one quantity |
+| `ArtifactStore` | Save and compatibility-check a fitted model plus immutable metadata |
+| `VolumeForecastProvider` | Generate a forecast using the declared point-in-time information set |
+| `ForecastModel` | Fit and predict through a replaceable regression adapter |
 
-- Source layout: `src/execsim`
-- Python: 3.11+
-- Core dependencies: `pandas`, `pyarrow`, `PyYAML`, `python-dotenv`, `alpaca-py`
-- Test dependency: `pytest`
-- CLI entry point: `execsim = execsim.cli:main`
+Concrete registries reject unknown names. Oracle VWAP is `EVALUATION_ONLY` and requires explicit opt-in in experiments.
 
-The repository expects local file paths to resolve relative to the project root unless an absolute path is supplied.
+## Information and time contract
 
-## Configuration Contract
+`DecisionContext.observations` contains timestamps strictly earlier than `current_timestamp`. Its forecast must be generated no later than the decision and cover exactly the declared future timestamps. Historical profiles use complete sessions whose dates precede the target session. Adaptive MPC receives only elapsed observations and a point-in-time forecast.
 
-Default config path: `configs/base.yaml`
+[The data leakage contract](DATA_LEAKAGE_CONTRACT.md) defines static and dynamic sample semantics, feature availability, chronological split ordering, embargo, and prohibited inputs.
 
-Loaded by: `execsim.config.load_config`
+## Order, data, and fill contract
 
-Required top-level fields:
+A `ParentOrder` contains an uppercase symbol, `buy` or `sell` side, positive integer shares, a date, and a timezone-naive half-open execution window `[start_time, end_time)`. Simulation timestamps must be timezone-aware, unique, and ordered after normalization. Prices must be finite and positive; volume must be finite and non-negative.
 
-- `project_name`
-- `symbols`
-- `start_date`
-- `end_date`
-- `timezone`
-- `data_provider`
-- `alpaca_feed`
-- `alpaca_adjustment`
-- `data_root`
-- `raw_data_dir`
-- `processed_data_dir`
-- `manifest_path`
-- `reports_dir`
-- `default_bar_timeframe`
-- `log_level`
-
-Current constraints:
-
-- `start_date <= end_date`
-- `default_bar_timeframe == "1min"`
-- `data_provider == "alpaca"`
-- `symbols` are normalized to uppercase
-- relative paths are resolved against the project root
-
-Optional demo simulation block:
-
-```yaml
-demo_twap:
-  symbol: AAPL
-  trade_date: 2026-03-16
-  side: buy
-  quantity: 5000
-  start_time: "10:00"
-  end_time: "10:30"
-  max_bar_participation_rate: 0.05
-```
-
-`demo_twap` constraints:
-
-- `symbol` must be included in `symbols`
-- `trade_date` must be within the configured date range
-- `side` must be `buy` or `sell`
-- `quantity` must be a positive integer
-- `start_time < end_time`
-- `max_bar_participation_rate` must be between `0` and `1`
-
-## Environment Contract
-
-`execsim.config.load_project_dotenv` loads `.env` from the project root by default.
-
-Alpaca downloads require:
-
-- `APCA_API_KEY_ID`
-- `APCA_API_SECRET_KEY`
-
-The simulator itself does not require network access or Alpaca credentials once processed data exists locally.
-
-## Data Schema
-
-Canonical processed bar columns:
-
-- `symbol`
-- `timestamp`
-- `open`
-- `high`
-- `low`
-- `close`
-- `volume`
-- `trade_count`
-- `vwap`
-
-Required non-null columns for validation:
-
-- `open`
-- `high`
-- `low`
-- `close`
-- `volume`
-
-Current session assumptions:
-
-- Bar timeframe is one minute.
-- Processed timestamps are timezone-aware.
-- Processed bars are regular-hours only.
-- Regular-hours window is `09:30 <= time < 16:00`.
-- A full regular-hours trading day has 390 bars.
-
-## Data Pipeline Specification
-
-The Iteration 1 pipeline downloads raw Alpaca minute bars, normalizes them into the canonical bar schema, filters regular trading hours, writes per-symbol raw and processed Parquet files, validates processed output, and builds a manifest CSV.
-
-Current CLI commands:
-
-- `download-data`: download, clean, validate, save, and refresh manifest
-- `validate-data`: validate configured processed symbol files
-- `build-manifest`: rebuild the processed-data manifest
-
-Processed data paths are per symbol:
+The reference price is bar VWAP when finite and otherwise the OHLC mean. Each bucket uses:
 
 ```text
-data/processed/alpaca/minute_bars/<SYMBOL>.parquet
+actual_capacity = floor(hard_participation_rate * actual_market_volume)
+executed_quantity = min(planned_quantity, remaining_inventory, actual_capacity)
 ```
 
-## Processed Data Loading
+Zero-volume bars have zero capacity. Static schedule misses are not silently redistributed. POV observes current bucket volume as it materializes; its trace names that convention. MPC re-solves over the remaining horizon and may warm-start OSQP.
 
-Primary loader helpers:
+## Policy contract
 
-- `load_processed_symbol_bars(config, symbol)`
-- `load_processed_symbol_day_bars(config, symbol, trade_date)`
-- `load_processed_window_bars(config, symbol, trade_date, start_time, end_time)`
-- `slice_processed_symbol_bars(bars, symbol, trade_date, start_time=None, end_time=None)`
+The policy registry supports these deployable policies:
 
-Window slicing semantics:
+| Name | Behavior |
+|---|---|
+| `twap` | Equal bucket weights with deterministic earliest-bucket integer remainder |
+| `vwap` | Historical point-in-time volume-profile weights |
+| `pov` | Floor of target participation times observable current bucket volume |
+| `almgren-chriss` | Analytical constant-parameter risk-impact schedule |
+| `optimal` | One constrained convex quadratic program over the full horizon |
+| `mpc` | Constrained quadratic program re-solved at every decision |
 
-- symbol comparison is uppercase
-- date match uses `timestamp.dt.date == trade_date`
-- start time is inclusive
-- end time is exclusive
-- output is sorted by timestamp and reset to a zero-based index
+Schedules use non-negative integers, preserve deterministic timestamp order, and reconcile to their feasible planned quantity. Constrained policies report forecast capacity shortfall rather than treating an infeasible order as complete.
 
-The simulator can also slice bars internally. CLI simulation loads the full processed symbol-day so the execution window can be used for fills while the same-day bars can be used for the session VWAP benchmark.
+## Mathematical and cost contract
 
-## Parent Order Specification
+[The mathematical model](MATHEMATICAL_MODEL.md) defines notation, units, QP matrices, risk and tracking terms, linear-in-participation temporary impact, half-spread, feasibility relaxation, OSQP acceptance, integer projection, benchmarks, and cost reconciliation. Assumed parameters remain labeled `assumed`; code does not call them calibrated.
 
-Model: `execsim.orders.ParentOrder`
+## Result and research-output contract
 
-Fields:
+The execution log records order identity, plan, actual capacity, executed quantity, inventory transition, forecast and decision IDs, reference and execution prices, and spread, impact, and timing attribution for every bucket. `SimulationSummary` reports requested, feasible, filled, and unfilled shares; completion plus overall, average-bucket, and maximum participation; benchmarks and side-aware slippage; modeled costs; capacity shortfall; and optimizer telemetry.
 
-- `symbol`
-- `side`
-- `quantity`
-- `trade_date`
-- `start_time`
-- `end_time`
+Experiment run IDs hash the canonical specification. A run writes Parquet results, CSV aggregates and paired differences, JSON config and provenance, a Markdown report, and figures. Statistics include sample size, dispersion, quantiles, seeded bootstrap intervals, paired differences versus TWAP, and win rates. Wall-clock solver timing is nondeterministic telemetry.
 
-Validation and normalization:
+## ML infrastructure contract
 
-- `symbol` is stripped and uppercased
-- `side` is stripped, lowercased, and must be `buy` or `sell`
-- `quantity` must be a positive integer share quantity
-- `trade_date` must be a `datetime.date`
-- `start_time` and `end_time` must be timezone-naive `datetime.time` values
-- `start_time < end_time`
+[The ML design](ML_DESIGN.md) specifies static and dynamic point-in-time rows, targets, feature metadata, 1/5/15-minute buckets, calendar filtering, partitioned Parquet, checksummed manifests, walk-forward folds, model adapters, training-only preprocessing, validation-only selection, locked tests, downstream TCA hooks, and compatibility-checked artifacts.
 
-This iteration supports only one symbol and one trading day per parent order.
+Historical training is disabled unless `allow_historical_training=true`; V1 acceptance does not grant that authorization. `--dry-run` resolves manifests, schemas, folds, model grids, artifacts, warnings, and evaluation intent without fitting. Tests may fit tiny `synthetic_fixture` datasets.
 
-## Execution Window Specification
+## Command contract
 
-Model: `execsim.orders.ExecutionWindow`
+The CLI provides these command groups:
 
-Fields:
+- data: `download-data`, `validate-data`, and `build-manifest`;
+- policies: `simulate --strategy ...` and the `simulate-twap` compatibility alias;
+- research: `experiment run`, `experiment report`, and `scenario`;
+- ML: `build-dataset`, `validate-dataset`, `inspect-dataset`, `create-splits`, `training-plan`, and `train --dry-run`;
+- diagnostics: `show-config` and `smoke`.
 
-- `trade_date`
-- `start_time`
-- `end_time`
+Commands return zero on success. Validation returns one for invalid data. Contract errors fail with a concise parser error. `--json` emits machine-readable simulation output.
 
-An execution window is a single-day, local market-time interval. Multi-day orders are not supported.
+## Determinism and compatibility
 
-## Strategy Interface
+Stable ordering, explicit seeds, canonical JSON hashing, checksummed sources and models, exact integer reconciliation, and named numerical tolerances make substantive outputs reproducible. Build timestamps, Git commits, dependency versions, and timing telemetry are provenance, not model inputs. Artifact loading fails closed on checksum or feature schema, target schema, bucket size, or timezone mismatch.
 
-Protocol: `execsim.strategies.base.SchedulingStrategy`
+## Verification contract
 
-Required method:
-
-```python
-generate_schedule(parent_order: ParentOrder, bars: pd.DataFrame) -> pd.DataFrame
-```
-
-Expected output:
-
-- one row per input bar
-- includes `timestamp`
-- includes integer `scheduled_qty`
-
-Strategy schedules are target quantities before simulator participation caps are applied.
-
-## TWAP Strategy Specification
-
-Implementation: `execsim.strategies.twap.TwapStrategy`
-
-Inputs:
-
-- `ParentOrder`
-- processed and execution-window-sliced bars
-
-Behavior:
-
-- requires a non-empty bar DataFrame with `timestamp`
-- distributes parent quantity evenly across all bars in the execution window
-- uses integer share quantities
-- allocates remainder shares to the earliest bars
-- guarantees `sum(scheduled_qty) == parent_order.quantity` before caps
-
-Example:
-
-- quantity `10` over `4` bars produces `[3, 3, 2, 2]`
-- quantity `2` over `5` bars produces `[1, 1, 0, 0, 0]`
-
-No catch-up, redistribution, volume awareness, or adaptivity is included.
-
-## Simulator Specification
-
-Primary functions:
-
-- `execsim.simulator.simulate_twap(parent_order, bars, max_bar_participation_rate)`
-- `execsim.simulator.simulate_order(parent_order, bars, strategy, max_bar_participation_rate)`
-
-Required simulation bar columns:
-
-- `timestamp`
-- `open`
-- `high`
-- `low`
-- `close`
-- `volume`
-
-If a `symbol` column is present, rows are filtered to the parent order symbol.
-
-The simulator expects processed bars for the relevant symbol-day. It uses:
-
-- all same-day bars passed into the simulator for `session_vwap`
-- execution-window bars for TWAP scheduling, fills, arrival price, and realized participation
-
-Window filter:
-
-- `timestamp.dt.date == parent_order.trade_date`
-- `parent_order.start_time <= timestamp.dt.time < parent_order.end_time`
-
-Per-bar participation cap:
-
-```text
-max_allowed_qty = floor(max_bar_participation_rate * bar_volume)
-```
-
-Child fill quantity:
-
-```text
-filled_qty = min(scheduled_qty, remaining_parent_qty, max_allowed_qty)
-```
-
-Fill price:
-
-- use bar `vwap` when present and non-null
-- otherwise use `(open + high + low + close) / 4`
-
-The simulator records one execution-log row per bar in the execution window, including bars with zero fill.
-
-Arrival price:
-
-- use the first executable bar in the execution window
-- use bar `vwap` when present and non-null
-- otherwise use `(open + high + low + close) / 4`
-
-Session VWAP:
-
-- use all same-symbol, same-date bars supplied to the simulator
-- weight each bar price by `volume`
-- each bar price uses `vwap` when present and non-null
-- otherwise it falls back to `(open + high + low + close) / 4`
-
-## Execution Log Specification
-
-Execution log type: `pandas.DataFrame`
-
-Columns:
-
-- `symbol`
-- `timestamp`
-- `side`
-- `scheduled_qty`
-- `max_allowed_qty`
-- `filled_qty`
-- `bar_volume`
-- `fill_price`
-
-The log is ordered by bar timestamp.
-
-## Simulation Summary Specification
-
-Model: `execsim.simulator.models.SimulationSummary`
-
-Fields:
-
-- `symbol`
-- `side`
-- `requested_qty`
-- `filled_qty`
-- `unfilled_qty`
-- `average_fill_price`
-- `arrival_price`
-- `session_vwap`
-- `implementation_shortfall_bps`
-- `vwap_slippage_bps`
-- `filled_notional`
-- `completion_rate`
-- `realized_participation`
-- `start_timestamp`
-- `end_timestamp`
-- `n_bars_in_window`
-
-Definitions:
-
-```text
-average_fill_price = sum(filled_qty_i * fill_price_i) / sum(filled_qty_i)
-filled_notional = sum(filled_qty_i * fill_price_i)
-completion_rate = filled_qty / requested_qty
-realized_participation = filled_qty / sum(bar_volume over execution window)
-implementation_shortfall_bps = 10000 * s * (average_fill_price - arrival_price) / arrival_price
-vwap_slippage_bps = 10000 * s * (average_fill_price - session_vwap) / session_vwap
-```
-
-where `s = +1` for buys and `s = -1` for sells.
-
-If no shares are filled:
-
-- `average_fill_price` is `None`
-- `filled_notional` is `0.0`
-- `implementation_shortfall_bps` is `None`
-- `vwap_slippage_bps` is `None`
-- `completion_rate` is `0.0`
-- `realized_participation` is `0.0` when window volume is zero, otherwise still `0.0`
-
-## CLI Specification
-
-Available commands:
-
-- `show-config`
-- `smoke`
-- `download-data`
-- `build-manifest`
-- `validate-data`
-- `simulate-twap`
-
-All commands accept:
-
-```text
---config <path>
-```
-
-`simulate-twap` accepts:
-
-- `--symbol`
-- `--trade-date`
-- `--side`
-- `--quantity`
-- `--start-time`
-- `--end-time`
-- `--max-bar-participation-rate`
-- `--json`
-
-If omitted, these values are read from `demo_twap` in the loaded config.
-
-The command prints:
-
-- short TWAP simulation summary with TCA metrics
-- first few execution-log rows
-
-With `--json`, the command prints a JSON object with `summary` and `execution_log_head`.
-
-Example:
+Run all local gates from the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -m execsim.cli simulate-twap --symbol AAPL --trade-date 2026-03-16 --side buy --quantity 5000 --start-time 10:00 --end-time 10:30 --max-bar-participation-rate 0.05
+.\.venv\Scripts\python.exe -m ruff check src tests scripts
+.\.venv\Scripts\python.exe -m ruff format --check src tests scripts
+.\.venv\Scripts\python.exe -m mypy src
+.\.venv\Scripts\python.exe scripts/repo_context.py --check
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## Testing Specification
+GitHub Actions repeats these checks on Python 3.11 and 3.13. Tests cover formulas, monotonicity, constraints, causal cutoffs, leakage rejection, diagnostics, integer invariants, buy/sell signs, partial fills, synthetic regimes, statistics, manifests, splits, preprocessing, artifacts, and CLI workflows.
 
-Current test categories:
+## Known limitations
 
-- config loading and `.env` loading behavior
-- bar cleaning behavior
-- processed-data validation behavior
-- smoke CLI behavior
-- TWAP schedule behavior
-- simulator cap, side, incomplete-fill, and weighted-average behavior
-- TCA metric behavior for side-aware shortfall signs, arrival price, session VWAP, partial fills, and zero fills
-
-Expected full-suite command:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest
-```
-
-New features should include focused tests at the same level of granularity before broad experiment or reporting code is added.
-
-## Current Non-Goals
-
-These are intentionally not implemented yet:
-
-- POV strategy
-- VWAP-profile strategy
-- adaptive strategy behavior
-- market-impact model
-- spread model
-- standalone implementation-shortfall report beyond summary metrics
-- transaction-cost overlays beyond summary TCA metrics
-- experiment runner
-- plotting or dashboard system
-- order-book or quote simulation
-- live broker execution
-- multi-asset or multi-day parent orders
-
-## Extension Guidance
-
-- Prefer dataclasses and simple functions.
-- Keep strategy output separate from simulator fills.
-- Do not hide assumptions in notebooks; encode reusable behavior in `src/execsim`.
-- Use processed local data for simulation paths.
-- Keep one new abstraction per real need.
-- Update this specification, `docs/IMPLEMENTATION_LOG.md`, and README workflow notes when behavior changes.
+Minute-bar replay omits quotes, spread measurement, queue position, within-bar paths, permanent impact, market reaction, auctions, fees, multi-asset coupling, and multi-day orders. The historical sample is small. Cost and risk inputs are assumptions unless their provenance states otherwise. No real historical model fit or predictive performance claim is part of V1 acceptance.

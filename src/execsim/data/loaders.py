@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date, time
 from pathlib import Path
-from typing import Iterator
 
 import pandas as pd
 
@@ -76,9 +76,7 @@ def slice_processed_symbol_bars(
     sliced["timestamp"] = pd.to_datetime(sliced["timestamp"])
 
     if "symbol" in sliced.columns:
-        sliced = sliced.loc[
-            sliced["symbol"].astype(str).str.upper() == symbol.upper()
-        ].copy()
+        sliced = sliced.loc[sliced["symbol"].astype(str).str.upper() == symbol.upper()].copy()
 
     timestamps = sliced["timestamp"]
     mask = timestamps.dt.date == trade_date
@@ -88,11 +86,7 @@ def slice_processed_symbol_bars(
     if end_time is not None:
         mask &= timestamps.dt.time < end_time
 
-    return (
-        sliced.loc[mask]
-        .sort_values("timestamp", kind="stable")
-        .reset_index(drop=True)
-    )
+    return sliced.loc[mask].sort_values("timestamp", kind="stable").reset_index(drop=True)
 
 
 def iter_processed_symbol_paths(config: ExecSimConfig) -> Iterator[tuple[str, Path]]:

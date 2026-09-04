@@ -1,15 +1,6 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pandas as pd
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 from execsim.data.cleaning import clean_intraday_bars
 
@@ -56,22 +47,19 @@ def test_clean_intraday_bars_filters_regular_hours_and_deduplicates() -> None:
 
 
 def test_clean_intraday_bars_accepts_symbol_timestamp_index() -> None:
-    raw = (
-        pd.DataFrame(
-            {
-                "symbol": ["MSFT"],
-                "timestamp": [pd.Timestamp("2026-03-16T13:30:00Z")],
-                "open": [200.0],
-                "high": [201.0],
-                "low": [199.0],
-                "close": [200.5],
-                "volume": [500],
-                "trade_count": [5],
-                "vwap": [200.4],
-            }
-        )
-        .set_index(["symbol", "timestamp"])
-    )
+    raw = pd.DataFrame(
+        {
+            "symbol": ["MSFT"],
+            "timestamp": [pd.Timestamp("2026-03-16T13:30:00Z")],
+            "open": [200.0],
+            "high": [201.0],
+            "low": [199.0],
+            "close": [200.5],
+            "volume": [500],
+            "trade_count": [5],
+            "vwap": [200.4],
+        }
+    ).set_index(["symbol", "timestamp"])
 
     cleaned = clean_intraday_bars(raw, timezone="America/New_York")
 

@@ -1,17 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, time
-import sys
-from pathlib import Path
 
 import pandas as pd
 import pytest
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 from execsim.orders import ParentOrder
 from execsim.simulator import simulate_twap
@@ -38,9 +30,7 @@ def test_implementation_shortfall_sign_follows_order_side(
 
     assert result.summary.arrival_price == pytest.approx(10.0)
     assert result.summary.average_fill_price == pytest.approx(11.0)
-    assert result.summary.implementation_shortfall_bps == pytest.approx(
-        expected_shortfall_bps
-    )
+    assert result.summary.implementation_shortfall_bps == pytest.approx(expected_shortfall_bps)
 
 
 def test_arrival_price_comes_from_first_executable_window_bar() -> None:

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, time
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 from zoneinfo import ZoneInfo
 
-from dotenv import load_dotenv
 import yaml
+from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "base.yaml"
@@ -36,13 +37,8 @@ class TwapSimulationDefaults:
             raise ValueError("demo_twap.quantity must be positive.")
         if self.start_time >= self.end_time:
             raise ValueError("demo_twap.start_time must be before end_time.")
-        if (
-            self.max_bar_participation_rate < 0
-            or self.max_bar_participation_rate > 1
-        ):
-            raise ValueError(
-                "demo_twap.max_bar_participation_rate must be between 0 and 1."
-            )
+        if self.max_bar_participation_rate < 0 or self.max_bar_participation_rate > 1:
+            raise ValueError("demo_twap.max_bar_participation_rate must be between 0 and 1.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -76,7 +72,7 @@ class ExecSimConfig:
     demo_twap: TwapSimulationDefaults
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, Any]) -> "ExecSimConfig":
+    def from_mapping(cls, mapping: Mapping[str, Any]) -> ExecSimConfig:
         symbols = _read_required_symbols(mapping, "symbols")
         start_date = _read_required_date(mapping, "start_date")
         end_date = _read_required_date(mapping, "end_date")

@@ -1,16 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, time
-import sys
-from pathlib import Path
 
 import pandas as pd
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 from execsim.orders import ParentOrder
 from execsim.strategies.twap import TwapStrategy

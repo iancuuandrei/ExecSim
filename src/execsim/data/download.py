@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
-import os
+from typing import Any, Protocol, cast
 
 import pandas as pd
 
@@ -53,8 +54,8 @@ def download_and_prepare_data(config: ExecSimConfig) -> DataPipelineResult:
                 symbol=symbol,
                 raw_path=str(raw_path),
                 processed_path=str(processed_path),
-                raw_rows=int(len(raw_bars)),
-                processed_rows=int(len(processed_bars)),
+                raw_rows=len(raw_bars),
+                processed_rows=len(processed_bars),
                 validation_report=report,
             )
         )
@@ -66,7 +67,13 @@ def download_and_prepare_data(config: ExecSimConfig) -> DataPipelineResult:
     )
 
 
-def download_raw_bars_for_symbol(client: object, config: ExecSimConfig, symbol: str) -> pd.DataFrame:
+class _StockBarsClient(Protocol):
+    def get_stock_bars(self, request: object) -> Any: ...
+
+
+def download_raw_bars_for_symbol(
+    client: _StockBarsClient, config: ExecSimConfig, symbol: str
+) -> pd.DataFrame:
     _ensure_supported_data_source(config)
 
     from alpaca.data.enums import Adjustment, DataFeed
@@ -86,12 +93,13 @@ def download_raw_bars_for_symbol(client: object, config: ExecSimConfig, symbol: 
     return _flatten_downloaded_bars(bars)
 
 
-def _create_alpaca_client() -> object:
+def _create_alpaca_client() -> _StockBarsClient:
     api_key = os.environ.get("APCA_API_KEY_ID")
     api_secret = os.environ.get("APCA_API_SECRET_KEY")
     if not api_key or not api_secret:
         raise RuntimeError(
-            "Missing Alpaca credentials. Set APCA_API_KEY_ID and APCA_API_SECRET_KEY in the environment."
+            "Missing Alpaca credentials. Set APCA_API_KEY_ID and "
+            "APCA_API_SECRET_KEY in the environment."
         )
 
     try:
@@ -101,7 +109,7 @@ def _create_alpaca_client() -> object:
             "alpaca-py is required for download-data. Install project dependencies first."
         ) from exc
 
-    return StockHistoricalDataClient(api_key, api_secret)
+    return cast(_StockBarsClient, StockHistoricalDataClient(api_key, api_secret))
 
 
 def _resolve_datetime_range(config: ExecSimConfig) -> tuple[datetime, datetime]:

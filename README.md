@@ -1,147 +1,76 @@
-# execution-cost-sim
+# ExecSim
 
-`execution-cost-sim` is a student quantitative-finance research repository for studying stock execution quality under a simplified intraday transaction-cost framework. The project is intended to compare benchmark execution styles such as TWAP, VWAP-profile, and POV for large parent orders, with a focus on execution costs and market-impact intuition rather than alpha generation or live trading.
+ExecSim is an offline, single-asset quantitative research framework for comparing intraday parent-order execution policies. It provides causal volume forecasts, static and adaptive policies, a transparent spread-and-impact model, constrained optimization, transaction-cost analysis (TCA), reproducible experiments, and leakage-safe ML infrastructure.
 
-## Current Status
+ExecSim is educational research software. It is not a live trading system, broker, order router, alpha model, or claim of production readiness.
 
-This repository is at `Iteration 3`: a minimal TWAP simulator with basic TCA metrics on top of processed minute bars.
+## Install the project
 
-- Minimal `src/` Python package
-- Config-driven Alpaca minute-bar download pipeline
-- Cleaning to `America/New_York` regular trading hours
-- Processed per-symbol Parquet outputs plus dataset manifest CSV
-- Parent order and single-day execution-window models
-- Minimal TWAP scheduler with integer child quantities
-- Simulation loop with per-bar participation caps and fill-price logging
-- Arrival, session VWAP, implementation-shortfall, VWAP-slippage, and filled-notional metrics
-- Smoke, config, cleaning, and validation tests
-- Durable project context and implementation log documents
+Create an isolated environment and install every V1 capability:
 
-## Repo Structure
-
-```text
-.
-|-- configs/
-|   `-- base.yaml
-|-- data/
-|   |-- processed/
-|   `-- raw/
-|-- docs/
-|   |-- IMPLEMENTATION_LOG.md
-|   |-- PROJECT_CONTEXT.md
-|   `-- SPECIFICATIONS.md
-|-- notebooks/
-|-- reports/
-|-- src/
-|   `-- execsim/
-|       |-- __init__.py
-|       |-- cli.py
-|       |-- config.py
-|       |-- orders.py
-|       |-- data/
-|       |   |-- cleaning.py
-|       |   |-- download.py
-|       |   |-- loaders.py
-|       |   |-- manifest.py
-|       |   |-- schema.py
-|       |   `-- validation.py
-|       |-- simulator/
-|       |   |-- core.py
-|       |   `-- models.py
-|       `-- strategies/
-|           |-- base.py
-|           `-- twap.py
-`-- tests/
-    |-- test_simulator_basic.py
-    |-- test_twap_schedule.py
-    |-- test_data_cleaning.py
-    |-- test_data_validation.py
-    |-- test_config.py
-    `-- test_smoke.py
-```
-
-## Quickstart
-
-```bash
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
-python -m pip install -e .[dev]
-python -m execsim.cli --help
-python -m execsim.cli download-data
-python -m execsim.cli validate-data
-python -m execsim.cli build-manifest
-python -m execsim.cli simulate-twap
-pytest
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-The installed console script `execsim --help` is also available after editable install.
+Verify the installation:
 
-## Documentation
-
-- `docs/PROJECT_CONTEXT.md`: stable project contract and roadmap intent
-- `docs/SPECIFICATIONS.md`: current implementation contracts and behavior
-- `docs/IMPLEMENTATION_LOG.md`: iteration history and current repo state
-
-## Data Pipeline
-
-The Iteration 1 pipeline uses Alpaca historical US stock bars with:
-
-- provider: `alpaca`
-- feed: `sip`
-- adjustment: `raw`
-- frequency: `1min`
-- session filter: `09:30 <= time < 16:00` in `America/New_York`
-
-Credentials must be present in the environment:
-
-```bash
-set APCA_API_KEY_ID=your_key
-set APCA_API_SECRET_KEY=your_secret
+```powershell
+.\.venv\Scripts\python.exe -m execsim.cli smoke
+.\.venv\Scripts\python.exe -m ruff check src tests scripts
+.\.venv\Scripts\python.exe -m mypy src
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Then run:
+## Run a simulation
 
-```bash
-python -m execsim.cli download-data
-python -m execsim.cli validate-data
-python -m execsim.cli build-manifest
+Run any deployable policy through one command:
+
+```powershell
+.\.venv\Scripts\python.exe -m execsim.cli simulate --strategy optimal --symbol AAPL --trade-date 2026-03-23 --quantity 5000 --start-time 10:00 --end-time 11:00 --json
 ```
 
-`download-data` downloads one symbol at a time from the config universe, saves raw Parquet under `data/raw/...`, writes cleaned processed Parquet under `data/processed/...`, validates the cleaned output, and refreshes the manifest CSV.
+Supported policies are `twap`, `vwap`, `pov`, `almgren-chriss`, `optimal`, and `mpc`. The original `simulate-twap` command remains a compatibility alias.
 
-## TWAP Simulation
+## Run a reproducible experiment
 
-Iteration 2 added one runnable simulator command, and Iteration 3 extends its summary with basic TCA metrics:
+Review `configs/experiment.yaml`, then run the configured grid:
 
-```bash
-python -m execsim.cli simulate-twap
+```powershell
+.\.venv\Scripts\python.exe -m execsim.cli experiment run --config configs/experiment.yaml
 ```
 
-By default, this uses the small `demo_twap` block in `configs/base.yaml`. You can override the parent order and cap from the CLI:
+Each stable run ID receives raw Parquet results, aggregate and paired CSV statistics, a configuration snapshot, provenance, figures, and a Markdown report under `reports/runs/`.
 
-```bash
-python -m execsim.cli simulate-twap --symbol AAPL --trade-date 2026-03-16 --side buy --quantity 5000 --start-time 10:00 --end-time 10:30 --max-bar-participation-rate 0.05
+## Prepare ML research data
+
+Build and validate point-in-time rows without fitting historical data:
+
+```powershell
+.\.venv\Scripts\python.exe -m execsim.cli ml build-dataset --mode static --bucket-minutes 5 --output-root data/ml
+.\.venv\Scripts\python.exe -m execsim.cli ml validate-dataset --manifest data/ml/DATASET_ID/manifest.json
 ```
 
-For machine-readable output:
+Replace `DATASET_ID` with the ID printed by the build command. Historical model fitting is disabled by default; the test suite fits only tiny synthetic fixtures.
 
-```bash
-python -m execsim.cli simulate-twap --json
+## Navigate the repository
+
+Use the manifest-backed context selector to find ownership, specifications, and focused checks:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/repo_context.py --list
+.\.venv\Scripts\python.exe scripts/repo_context.py --path src/execsim/optimization/qp.py --json
 ```
 
-The simulator loads processed per-symbol Parquet data, slices one trade date for the session benchmark, slices one intraday execution window for fills, builds a fixed TWAP schedule, applies a per-bar participation cap, and prints a summary plus the first few execution-log rows.
+Start with these documents:
 
-Current summary metrics include fill completion, realized participation, arrival price, session VWAP, implementation shortfall in bps, VWAP slippage in bps, and filled notional. Arrival and session VWAP are bar-based benchmarks using bar `vwap` when available and an OHLC average fallback otherwise.
+- `docs/standards/implementation.md` defines code and documentation practice and records engineering directions.
+- `docs/SPECIFICATIONS.md` is the normative component contract.
+- `docs/MATHEMATICAL_MODEL.md` defines formulas, units, constraints, and signs.
+- `docs/DATA_LEAKAGE_CONTRACT.md` defines the point-in-time boundary.
+- `docs/ML_DESIGN.md` defines ML data, splits, training, and artifacts.
+- `docs/NAVIGATION.md` maps repository areas.
 
-## Roadmap
+## Understand the evidence boundary
 
-- Iteration 0: bootstrap repository, config system, CLI, tests, and project docs
-- Iteration 1: package the Alpaca ingestion, cleaning, validation, and manifest workflow
-- Iteration 2: add parent-order representation, TWAP scheduling, and a minimal processed-bar simulator
-- Iteration 3: add arrival, session VWAP, implementation-shortfall, VWAP-slippage, and filled-notional metrics
-- Iteration 4: add experiment workflows, reporting outputs, and validation checks
-
-## Disclaimer
-
-This is an educational execution-cost simulator for offline research. It is not a live execution engine, not trading advice, and not a production brokerage or order-routing system.
-
+Historical replay keeps market bars exogenous and applies assumed costs to simulated fills. Minute bars do not expose quotes, queue position, within-bar paths, or counterfactual market response. Reports describe only the selected bars and assumptions; they do not establish strategy superiority or expected live performance.
