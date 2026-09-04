@@ -1,5 +1,14 @@
 # Implementation log
 
+## Performance hardening and ADR governance — 2026-09-04
+
+- Added indexed ADRs for the Python stack and navigation, point-in-time boundary, convex QP and impact model, forecast-only ML boundary, and performance workspace design.
+- Updated `AGENTS.md` to require ADRs for material decisions and to preserve accepted history through superseding records.
+- Replaced repeated historical DataFrame filtering, timestamp formatting, and pivot construction with a target-date-keyed causal NumPy matrix cache.
+- Added `OptimalExecutionWorkspace`, exact-horizon OSQP setup/update reuse, cached backend selection, structured tail-risk Hessian construction, structural production validation, and component-level timing diagnostics.
+- Preserved the pre-change deterministic 60-bucket MPC integer schedule on the benchmark fixture.
+- Added deterministic profiling and extended benchmark output. The MPC benchmark median improved from 5.0630 seconds to 1.3228 seconds; the profiler improved from 4.544 seconds to 0.554 seconds.
+
 ## V1 completion pass — 2026-09-04
 
 The repository advanced from a TWAP-only simulator to the V1 quantitative research framework:

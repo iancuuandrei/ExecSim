@@ -78,3 +78,25 @@ def test_experiment_writes_durable_outputs_and_oracle_is_explicit(tmp_path: Path
     oracle = output.results.loc[output.results["strategy"].str.startswith("oracle")]
     assert oracle["evaluation_only"].all()
     assert "demonstration" in output.paths["report"].read_text(encoding="utf-8")
+
+
+def test_experiment_reuses_mpc_workspaces_across_compatible_units(tmp_path: Path) -> None:
+    spec = ExperimentSpec(
+        symbols=("AAPL",),
+        trade_dates=(date(2026, 3, 13), date(2026, 3, 16)),
+        quantities=(10,),
+        strategies=("mpc",),
+        start_time=time(9, 30),
+        end_time=time(9, 34),
+        planned_participation_rate=0.5,
+        hard_participation_rate=0.5,
+        risk_aversions=(0.01,),
+        temporary_impacts=(0.1,),
+    )
+
+    output = ExperimentRunner(spec, {"AAPL": _multi_day_bars()}, tmp_path).run(write_outputs=False)
+
+    first_day = output.decision_trace["trade_date"] == "2026-03-13"
+    second_day = output.decision_trace["trade_date"] == "2026-03-16"
+    assert not output.decision_trace.loc[first_day, "solver_workspace_reused"].any()
+    assert output.decision_trace.loc[second_day, "solver_workspace_reused"].all()

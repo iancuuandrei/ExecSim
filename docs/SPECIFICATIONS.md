@@ -23,7 +23,7 @@ Concrete registries reject unknown names. Oracle VWAP is `EVALUATION_ONLY` and r
 
 ## Information and time contract
 
-`DecisionContext.observations` contains timestamps strictly earlier than `current_timestamp`. Its forecast must be generated no later than the decision and cover exactly the declared future timestamps. Historical profiles use complete sessions whose dates precede the target session. Adaptive MPC receives only elapsed observations and a point-in-time forecast.
+`DecisionContext.observations` contains timestamps strictly earlier than `current_timestamp`. Its forecast must be generated no later than the decision and cover exactly the declared future timestamps. Historical profiles use complete sessions whose dates precede the target session. A historical provider may cache its causally filtered session-by-bucket matrix only by symbol scope and target date; it derives each requested window from that matrix. Adaptive MPC receives only elapsed observations and a point-in-time forecast.
 
 [The data leakage contract](DATA_LEAKAGE_CONTRACT.md) defines static and dynamic sample semantics, feature availability, chronological split ordering, embargo, and prohibited inputs.
 
@@ -38,7 +38,7 @@ actual_capacity = floor(hard_participation_rate * actual_market_volume)
 executed_quantity = min(planned_quantity, remaining_inventory, actual_capacity)
 ```
 
-Zero-volume bars have zero capacity. Static schedule misses are not silently redistributed. POV observes current bucket volume as it materializes; its trace names that convention. MPC re-solves over the remaining horizon and may warm-start OSQP.
+Zero-volume bars have zero capacity. Static schedule misses are not silently redistributed. POV observes current bucket volume as it materializes; its trace names that convention. MPC re-solves over the remaining horizon and may warm-start OSQP. `OptimalExecutionWorkspace` caches OSQP setups by exact horizon and updates objective and bound values when a horizon recurs. Warm starts are shifted to the new dimension and clipped to inventory and per-bucket capacity bounds.
 
 ## Policy contract
 
@@ -63,7 +63,7 @@ Schedules use non-negative integers, preserve deterministic timestamp order, and
 
 The execution log records order identity, plan, actual capacity, executed quantity, inventory transition, forecast and decision IDs, reference and execution prices, and spread, impact, and timing attribution for every bucket. `SimulationSummary` reports requested, feasible, filled, and unfilled shares; completion plus overall, average-bucket, and maximum participation; benchmarks and side-aware slippage; modeled costs; capacity shortfall; and optimizer telemetry.
 
-Experiment run IDs hash the canonical specification. A run writes Parquet results, CSV aggregates and paired differences, JSON config and provenance, a Markdown report, and figures. Statistics include sample size, dispersion, quantiles, seeded bootstrap intervals, paired differences versus TWAP, and win rates. Wall-clock solver timing is nondeterministic telemetry.
+Experiment run IDs hash the canonical specification. A run reuses historical providers and compatible policy workspaces within that run. It writes Parquet results, CSV aggregates and paired differences, JSON config and provenance, a Markdown report, and figures. Statistics include sample size, dispersion, quantiles, seeded bootstrap intervals, paired differences versus TWAP, and win rates. Wall-clock solver timing is nondeterministic telemetry. Optimizer traces separate matrix construction, setup, numeric update, eigenvalue validation, solve, and integer projection timing.
 
 ## ML infrastructure contract
 

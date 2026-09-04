@@ -53,7 +53,7 @@ a = h - 2 lambda_risk Q L^T D 1
     - 2 lambda_track w/Q_target
 ```
 
-Every term in `P` is positive semidefinite when inputs are valid. The solver validates symmetry and the minimum eigenvalue within tolerance. Integer forecast capacities are `c_k=floor(rho_max*v_hat_k)`, feasible completion is `Q_f=min(Q,sum c_k)`, and constraints are `0<=q<=c` and `sum q=Q_f`. A capacity shortfall is a result, not solver infeasibility.
+Every term in `P` is positive semidefinite when inputs are valid. The implementation constructs the risk element directly as `R_ij=sum(d_k for k>=max(i,j))`, where `d_k=sigma_k^2*delta_t`; it does not materialize diagonal and lower-triangular intermediates. Static, standalone, and debug solves validate symmetry and the minimum eigenvalue numerically. Adaptive MPC uses the analytical lower bound supplied by strictly positive temporary-impact curvature plus positive-semidefinite risk and tracking terms. Integer forecast capacities are `c_k=floor(rho_max*v_hat_k)`, feasible completion is `Q_f=min(Q,sum c_k)`, and constraints are `0<=q<=c` and `sum q=Q_f`. A capacity shortfall is a result, not solver infeasibility.
 
 ## Integer projection
 
@@ -79,7 +79,7 @@ The `kappa -> 0` limit is `x_j=Q(N-j)/N`, hence equal-rate TWAP. Greater risk av
 
 ## Model-predictive control
 
-At each bucket, MPC constructs a new point-in-time forecast over the remaining horizon, recomputes feasible capacity for realized remaining inventory, solves the same constrained problem, executes only the first action subject to actual capacity, and repeats. Warm starts improve numerical work but do not change the accepted solution tolerance. Every solve is retained in a decision trace.
+At each bucket, MPC constructs a new point-in-time forecast over the remaining horizon, recomputes feasible capacity for realized remaining inventory, solves the same constrained problem, executes only the first action subject to actual capacity, and repeats. The workspace keeps one solver setup per exact horizon; repeated experiment units update its numeric values. A shifted warm start is clipped to the new inventory and capacity bounds. Warm starts improve numerical work but do not change the accepted solution tolerance. Every solve is retained in a decision trace.
 
 ## TCA attribution
 

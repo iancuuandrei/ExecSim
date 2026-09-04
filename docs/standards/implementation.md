@@ -9,6 +9,7 @@ The active implementation directions are:
 | Decision | Direction | Reason |
 |---|---|---|
 | Repository navigation | Use `AGENTS.md`, `repo_manifest.yaml`, `docs/NAVIGATION.md`, and `scripts/repo_context.py`; do not add Nx | A single Python package does not justify a second Node dependency and task graph |
+| Decision history | Record material choices in indexed ADRs and supersede rather than rewrite accepted records | Specifications define current behavior, while ADRs preserve the reason and rejected alternatives |
 | Policy information boundary | Give policies a point-in-time `DecisionContext`, not an unrestricted target-session data frame | The boundary makes future-data access enforceable and testable |
 | Optimization core | Use an explicit OSQP convex quadratic program, with a separate analytical Almgren–Chriss reference | The QP exposes feasibility, participation constraints, matrices, residuals, and deterministic integer projection |
 | Realized cost model | Use half-spread plus linear-in-participation temporary price impact | The resulting total impact cost is transparent, convex, and consistent between planning and simulation |
@@ -20,6 +21,8 @@ The active implementation directions are:
 | Automation | Test Python 3.11 and 3.13 with Ruff, mypy, repository-contract validation, and pytest in GitHub Actions | The matrix covers the supported minimum and current development runtime |
 | Dependency compatibility | Constrain NumPy below 2.4 while Python 3.11 remains supported | Newer NumPy type stubs require syntax beyond the repository's declared type-check target |
 | QP scaling | Enable OSQP adaptive penalty updates while keeping fixed tolerances, iteration bounds, and acceptance checks | The full parameter grid exposed poor convergence with a fixed penalty on differently scaled risk and impact terms |
+| Performance architecture | Cache causally filtered historical matrices and reuse exact-horizon OSQP setups through `OptimalExecutionWorkspace` | Profiling identified repeated forecast reconstruction as dominant; exact-horizon reuse preserves the original integer schedule |
+| QP validation levels | Use structural convexity validation in adaptive MPC and full eigenvalue validation in static or standalone solves | Positive temporary curvature and positive-semidefinite added terms prove convexity without repeated cubic work in the hot path |
 | ML dataset memory | Discover symbols with bounded Arrow batches and build one symbol partition at a time; CLI builds do not retain result rows | This prevents a future multi-symbol, multi-year universe from becoming one pandas DataFrame |
 
 Apply this order of precedence:
@@ -30,6 +33,8 @@ Apply this order of precedence:
 4. Apply the broadly useful Microsoft, Google, and GitHub technical-writing practices cited below.
 
 Do not copy vendor-specific product, user-interface, branding, or internal publishing conventions when they do not apply to ExecSim.
+
+For the rationale and consequences behind these directions, use the [architecture decision index](../ADRs/README.md). A material direction change is incomplete until its ADR, this table, specifications, and tests agree.
 
 ## Write for the reader
 

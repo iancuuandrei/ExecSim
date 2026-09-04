@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 
-from execsim.optimization import OptimalExecutionProblem, solve_optimal_execution
+from execsim.optimization import OptimalExecutionProblem, OptimalExecutionWorkspace
 from execsim.policies.models import DecisionContext, PolicyDecision
 
 
@@ -18,6 +18,7 @@ class AdaptiveMPCPolicy:
     volatility: float = 0.01
     policy_name: str = "mpc"
     _warm_start: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
+    _workspace: OptimalExecutionWorkspace | None = field(default=None, init=False, repr=False)
     _decision_number: int = field(default=0, init=False, repr=False)
 
     def reset(self) -> None:
@@ -28,6 +29,8 @@ class AdaptiveMPCPolicy:
         if context.forecast is None:
             raise ValueError("Adaptive MPC requires a point-in-time volume forecast.")
         n = context.remaining_buckets
+        if self._workspace is None or self._workspace.maximum_horizon != n + self._decision_number:
+            self._workspace = OptimalExecutionWorkspace(n, validation_level="structural")
         problem = OptimalExecutionProblem(
             quantity=max(context.remaining_inventory, 1),
             forecast_volumes=np.asarray(context.forecast.expected_volumes, dtype=float),
@@ -44,7 +47,7 @@ class AdaptiveMPCPolicy:
             if self._warm_start is not None and len(self._warm_start) == n
             else None
         )
-        result = solve_optimal_execution(problem, warm_start=warm)
+        result = self._workspace.solve(problem, warm_start=warm)
         self._warm_start = result.continuous_quantities[1:].copy()
         self._decision_number += 1
         action = min(int(result.integer_quantities[0]), context.remaining_inventory)
@@ -90,6 +93,19 @@ class AdaptiveMPCPolicy:
                 "solver_absolute_tolerance": result.diagnostics.absolute_tolerance,
                 "solver_relative_tolerance": result.diagnostics.relative_tolerance,
                 "solve_time_seconds": result.diagnostics.solve_time_seconds,
+                "matrix_construction_time_seconds": (
+                    result.diagnostics.matrix_construction_time_seconds
+                ),
+                "solver_setup_time_seconds": result.diagnostics.solver_setup_time_seconds,
+                "solver_update_time_seconds": result.diagnostics.solver_update_time_seconds,
+                "eigenvalue_validation_time_seconds": (
+                    result.diagnostics.eigenvalue_validation_time_seconds
+                ),
+                "integer_projection_time_seconds": (
+                    result.diagnostics.integer_projection_time_seconds
+                ),
+                "solver_workspace_reused": result.diagnostics.workspace_reused,
+                "solver_validation_level": result.diagnostics.validation_level,
                 "forecast_id": context.forecast.forecaster_id,
                 "forecast_training_cutoff": context.forecast.training_data_cutoff,
             },

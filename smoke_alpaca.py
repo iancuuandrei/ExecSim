@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
 import os
+from datetime import UTC, datetime, timedelta
 
-from dotenv import load_dotenv
+from alpaca.data.enums import Adjustment, DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.data.enums import Adjustment, DataFeed
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -14,7 +14,7 @@ api_secret = os.environ["APCA_API_SECRET_KEY"]
 
 client = StockHistoricalDataClient(api_key, api_secret)
 
-end_utc = datetime.now(timezone.utc) - timedelta(minutes=20)
+end_utc = datetime.now(UTC) - timedelta(minutes=20)
 start_utc = end_utc - timedelta(days=3)
 
 request = StockBarsRequest(

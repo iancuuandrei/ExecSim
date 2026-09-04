@@ -4,6 +4,7 @@ from execsim.optimization.analytical import almgren_chriss_continuous_schedule
 from execsim.optimization.integer import project_to_integer_capacities
 from execsim.optimization.qp import (
     OptimalExecutionProblem,
+    OptimalExecutionWorkspace,
     OptimizationResult,
     SolverDiagnostics,
     build_qp_matrices,
@@ -12,6 +13,7 @@ from execsim.optimization.qp import (
 
 __all__ = [
     "OptimalExecutionProblem",
+    "OptimalExecutionWorkspace",
     "OptimizationResult",
     "SolverDiagnostics",
     "almgren_chriss_continuous_schedule",

@@ -65,6 +65,7 @@ Use the manifest-backed context selector to find ownership, specifications, and 
 Start with these documents:
 
 - `docs/standards/implementation.md` defines code and documentation practice and records engineering directions.
+- `docs/ADRs/README.md` indexes architectural choices, rationale, and rejected alternatives.
 - `docs/SPECIFICATIONS.md` is the normative component contract.
 - `docs/MATHEMATICAL_MODEL.md` defines formulas, units, constraints, and signs.
 - `docs/DATA_LEAKAGE_CONTRACT.md` defines the point-in-time boundary.

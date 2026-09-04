@@ -5,6 +5,7 @@ ExecSim uses a small manifest-backed navigation system rather than Nx. The repos
 ## Start here
 
 - Implementation directions and writing standard: `docs/standards/implementation.md`
+- Architectural decisions and rationale: `docs/ADRs/README.md`
 - Normative implementation behavior and invariants: `docs/SPECIFICATIONS.md`
 - Mathematical derivations: `docs/MATHEMATICAL_MODEL.md`
 - Point-in-time rules: `docs/DATA_LEAKAGE_CONTRACT.md`
@@ -38,6 +39,8 @@ The selector reports the owning area, relevant specifications, tests, and verifi
 | `src/execsim/reporting/` | TCA aggregation, statistics, figures, Markdown reports |
 | `src/execsim/ml/` | Point-in-time datasets, splits, adapters, training, artifacts |
 | `configs/` | Versioned assumptions and runnable workflows |
+| `scripts/` | Repository checks, deterministic benchmarks, and profiling tools |
 | `tests/` | Unit, invariant, integration, and CLI evidence |
+| `docs/ADRs/` | Durable architectural decisions, alternatives, and consequences |
 
 Paths may be introduced incrementally, but once present they must be registered and specified.

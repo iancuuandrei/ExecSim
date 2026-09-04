@@ -1,14 +1,14 @@
-from pathlib import Path
-from datetime import datetime, time
-from zoneinfo import ZoneInfo
 import os
+from datetime import datetime, time
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
-from dotenv import load_dotenv
+from alpaca.data.enums import Adjustment, DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.data.enums import Adjustment, DataFeed
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -40,8 +40,7 @@ bars = client.get_stock_bars(request).df.reset_index()
 bars["timestamp"] = pd.to_datetime(bars["timestamp"], utc=True).dt.tz_convert(ny_tz)
 
 bars = bars[
-    (bars["timestamp"].dt.time >= time(9, 30)) &
-    (bars["timestamp"].dt.time < time(16, 0))
+    (bars["timestamp"].dt.time >= time(9, 30)) & (bars["timestamp"].dt.time < time(16, 0))
 ].copy()
 
 bars = bars.sort_values("timestamp")

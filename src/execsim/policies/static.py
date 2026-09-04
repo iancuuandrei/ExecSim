@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from execsim.optimization import (
     OptimalExecutionProblem,
+    OptimalExecutionWorkspace,
     almgren_chriss_continuous_schedule,
     project_to_integer_capacities,
-    solve_optimal_execution,
 )
 from execsim.orders import ParentOrder
 from execsim.policies.models import DecisionContext, PolicyDecision, SchedulePlan
@@ -111,7 +111,7 @@ class AlmgrenChrissPolicy:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class ConstrainedOptimalPolicy:
     risk_aversion: float = 0.0
     tracking_penalty: float = 0.0
@@ -119,12 +119,15 @@ class ConstrainedOptimalPolicy:
     temporary_impact: float = 0.01
     volatility: float = 0.01
     policy_name: str = "optimal"
+    _workspace: OptimalExecutionWorkspace | None = field(default=None, init=False, repr=False)
 
     def create_plan(self, parent_order: ParentOrder, context: DecisionContext) -> SchedulePlan:
         del parent_order
         if context.forecast is None:
             raise ValueError("Constrained optimal policy requires a point-in-time forecast.")
         n = context.remaining_buckets
+        if self._workspace is None or self._workspace.maximum_horizon != n:
+            self._workspace = OptimalExecutionWorkspace(n, validation_level="full")
         problem = OptimalExecutionProblem(
             quantity=context.remaining_inventory,
             forecast_volumes=np.asarray(context.forecast.expected_volumes, dtype=float),
@@ -136,7 +139,7 @@ class ConstrainedOptimalPolicy:
             tracking_penalty=self.tracking_penalty,
             forecast_weights=np.asarray(context.forecast.normalized_shares, dtype=float),
         )
-        result = solve_optimal_execution(problem)
+        result = self._workspace.solve(problem)
         warnings = (
             (f"predicted_capacity_shortfall={result.predicted_capacity_shortfall}",)
             if result.predicted_capacity_shortfall

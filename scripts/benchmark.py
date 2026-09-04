@@ -123,6 +123,38 @@ def main() -> int:
         "ml_parquet_scan_and_build": ml_result,
         "claim_boundary": "local synthetic throughput; not production capacity",
     }
+    profile_policy = AdaptiveMPCPolicy()
+    profile_provider = HistoricalProfileForecaster(all_bars, lookback_sessions=4)
+    simulate_policy(
+        parent_order=order,
+        bars=bars,
+        policy=profile_policy,
+        constraints=constraints,
+        forecast_provider=profile_provider,
+    )
+    profiled_result = simulate_policy(
+        parent_order=order,
+        bars=bars,
+        policy=profile_policy,
+        constraints=constraints,
+        forecast_provider=profile_provider,
+    )
+    trace = profiled_result.decision_trace
+    payload["adaptive_mpc_component_seconds"] = {
+        column: float(trace[column].sum())
+        for column in (
+            "matrix_construction_time_seconds",
+            "solver_setup_time_seconds",
+            "solver_update_time_seconds",
+            "eigenvalue_validation_time_seconds",
+            "solve_time_seconds",
+            "integer_projection_time_seconds",
+        )
+    }
+    payload["adaptive_mpc_workspace"] = {
+        "decisions": len(trace),
+        "reused_setups": int(trace["solver_workspace_reused"].sum()),
+    }
     print(json.dumps(payload, indent=2, default=str))
     return 0
 

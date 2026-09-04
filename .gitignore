@@ -17,3 +17,4 @@ reports/runs/
 reports/scenarios/
 artifacts/
 tests/.tmp*
+*.prof

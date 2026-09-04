@@ -166,7 +166,7 @@ def simulate_policy(
             planned = 0
         else:
             future = timestamps[index:]
-            observations = window_bars.iloc[:index].copy()
+            observations = window_bars.iloc[:index]
             forecast = _make_forecast(
                 forecast_provider, parent_order, timestamp, future, observations
             )

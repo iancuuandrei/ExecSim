@@ -2,16 +2,24 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Literal
 
 import numpy as np
 import pandas as pd
+from numpy.typing import NDArray
 
 from execsim.forecasting.models import VolumeForecast
 
 ProfileEstimator = Literal["mean", "median", "ewma", "previous"]
+
+
+@dataclass(frozen=True, slots=True)
+class _HistoricalMatrix:
+    volumes: NDArray[np.float64]
+    bucket_columns: dict[str, int]
+    session_dates: tuple[date, ...]
 
 
 @dataclass(slots=True)
@@ -25,6 +33,9 @@ class HistoricalProfileForecaster:
     pooled: bool = False
     feature_schema_version: str = "volume-profile-v1"
     data_manifest_hash: str | None = None
+    _history_cache: dict[tuple[str, date], _HistoricalMatrix] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         required = {"symbol", "timestamp", "volume"}
@@ -45,6 +56,11 @@ class HistoricalProfileForecaster:
         if volumes.isna().any() or (volumes < 0).any():
             raise ValueError("Historical profile volumes must be finite and non-negative.")
         bars["volume"] = volumes.astype(float)
+        bars["_session_key"] = (
+            bars["symbol"].astype(str).str.upper() + "|" + bars["timestamp"].dt.date.astype(str)
+        )
+        bars["_session_date"] = bars["timestamp"].dt.date
+        bars["_bucket_time"] = bars["timestamp"].dt.strftime("%H:%M")
         self.historical_bars = bars
         if self.data_manifest_hash is None:
             digest_input = bars.loc[:, ["symbol", "timestamp", "volume"]].to_csv(index=False)
@@ -68,69 +84,59 @@ class HistoricalProfileForecaster:
         timestamps = tuple(pd.Timestamp(value) for value in bucket_timestamps)
         if not timestamps:
             raise ValueError("At least one future bucket is required.")
-        bars = self.historical_bars
-        prior = bars.loc[bars["timestamp"].dt.date < session_date].copy()
-        if not self.pooled:
-            prior = prior.loc[prior["symbol"].astype(str).str.upper() == symbol.upper()].copy()
-        if prior.empty:
-            raise ValueError(f"No prior sessions are available for {symbol} before {session_date}.")
-
         expected_times = [timestamp.strftime("%H:%M") for timestamp in timestamps]
-        prior["session_key"] = (
-            prior["symbol"].astype(str).str.upper() + "|" + prior["timestamp"].dt.date.astype(str)
+        history = self._history_matrix(symbol, session_date)
+        try:
+            column_indices = [history.bucket_columns[value] for value in expected_times]
+        except KeyError:
+            column_indices = []
+        window = (
+            history.volumes[:, column_indices]
+            if column_indices
+            else np.empty((len(history.session_dates), 0))
         )
-        prior["bucket_time"] = prior["timestamp"].dt.strftime("%H:%M")
-        prior = prior.loc[prior["bucket_time"].isin(expected_times)].copy()
-        counts = prior.groupby("session_key")["bucket_time"].nunique()
-        complete_keys = counts[counts == len(set(expected_times))].index
-        prior = prior.loc[prior["session_key"].isin(complete_keys)].copy()
-        if prior.empty:
+        complete = (
+            np.all(np.isfinite(window), axis=1)
+            if window.shape[1]
+            else np.zeros(len(window), dtype=bool)
+        )
+        selected_rows = np.flatnonzero(complete)
+        if not len(selected_rows):
             raise ValueError(
                 "No preceding sessions contain the complete requested forecast window."
             )
-
-        session_order = (
-            prior.groupby("session_key")["timestamp"].min().sort_values(kind="stable").index
-        )
         if self.lookback_sessions is not None:
-            session_order = session_order[-self.lookback_sessions :]
-        prior = prior.loc[prior["session_key"].isin(session_order)].copy()
-        pivot = prior.pivot_table(
-            index="session_key",
-            columns="bucket_time",
-            values="volume",
-            aggfunc="sum",
-        ).reindex(index=session_order, columns=expected_times)
-        if pivot.isna().any().any():
-            raise ValueError("Historical profile construction found missing buckets.")
-        totals = pivot.sum(axis=1)
+            selected_rows = selected_rows[-self.lookback_sessions :]
+        window = window[selected_rows]
+        totals = window.sum(axis=1)
         positive = totals > 0
-        pivot = pivot.loc[positive]
-        totals = totals.loc[positive]
-        if pivot.empty:
+        window = window[positive]
+        totals = totals[positive]
+        selected_rows = selected_rows[positive]
+        if not len(window):
             raise ValueError("Historical profile requires at least one positive-volume session.")
-        shapes = pivot.div(totals, axis=0)
+        shapes = window / totals[:, None]
 
         if self.estimator == "mean":
-            raw_shape = shapes.mean(axis=0).to_numpy(float)
+            raw_shape = shapes.mean(axis=0)
             expected_total = float(totals.mean())
         elif self.estimator == "median":
-            raw_shape = shapes.median(axis=0).to_numpy(float)
-            expected_total = float(totals.median())
+            raw_shape = np.median(shapes, axis=0)
+            expected_total = float(np.median(totals))
         elif self.estimator == "previous":
-            raw_shape = shapes.iloc[-1].to_numpy(float)
-            expected_total = float(totals.iloc[-1])
+            raw_shape = shapes[-1]
+            expected_total = float(totals[-1])
         else:
             count = len(shapes)
             weights = (1.0 - self.ewma_alpha) ** np.arange(count - 1, -1, -1)
             weights /= weights.sum()
-            raw_shape = np.average(shapes.to_numpy(float), axis=0, weights=weights)
-            expected_total = float(np.average(totals.to_numpy(float), weights=weights))
+            raw_shape = np.average(shapes, axis=0, weights=weights)
+            expected_total = float(np.average(totals, weights=weights))
 
         raw_shape = np.maximum(raw_shape, 0.0)
         shape = raw_shape / raw_shape.sum()
         expected = expected_total * shape
-        cutoff = prior["timestamp"].dt.date.max()
+        cutoff = max(history.session_dates[index] for index in selected_rows)
         warnings: list[str] = []
         if len(shapes) < 5:
             warnings.append("fewer_than_five_complete_prior_sessions")
@@ -149,3 +155,44 @@ class HistoricalProfileForecaster:
             data_manifest_hash=str(self.data_manifest_hash),
             warnings=tuple(warnings),
         )
+
+    def _history_matrix(self, symbol: str, session_date: date) -> _HistoricalMatrix:
+        """Return a cached, causally filtered session-by-bucket volume matrix."""
+        cache_symbol = "*" if self.pooled else symbol.upper()
+        key = (cache_symbol, session_date)
+        cached = self._history_cache.get(key)
+        if cached is not None:
+            return cached
+
+        bars = self.historical_bars
+        mask = bars["_session_date"] < session_date
+        if not self.pooled:
+            mask &= bars["symbol"].astype(str).str.upper() == cache_symbol
+        prior = bars.loc[mask]
+        if prior.empty:
+            raise ValueError(f"No prior sessions are available for {symbol} before {session_date}.")
+        session_order = (
+            prior.groupby("_session_key", sort=False)["timestamp"]
+            .min()
+            .sort_values(kind="stable")
+            .index
+        )
+        matrix = prior.pivot_table(
+            index="_session_key",
+            columns="_bucket_time",
+            values="volume",
+            aggfunc="sum",
+        ).reindex(index=session_order)
+        session_dates = tuple(
+            prior.groupby("_session_key", sort=False)["_session_date"]
+            .first()
+            .reindex(session_order)
+            .tolist()
+        )
+        cached = _HistoricalMatrix(
+            volumes=matrix.to_numpy(dtype=float),
+            bucket_columns={str(value): index for index, value in enumerate(matrix.columns)},
+            session_dates=session_dates,
+        )
+        self._history_cache[key] = cached
+        return cached

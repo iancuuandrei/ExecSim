@@ -93,6 +93,15 @@ class ExperimentRunner:
         run_id = _stable_run_id(self.spec)
         rows: list[dict[str, object]] = []
         traces: list[pd.DataFrame] = []
+        historical_providers = {
+            symbol.upper(): HistoricalProfileForecaster(
+                bars,
+                estimator=self.spec.profile_estimator,  # type: ignore[arg-type]
+                lookback_sessions=self.spec.profile_lookback_sessions,
+            )
+            for symbol, bars in normalized.items()
+        }
+        policy_cache: dict[tuple[str, float, float], object] = {}
         sequence = product(
             sorted(self.spec.symbols),
             sorted(self.spec.trade_dates),
@@ -112,11 +121,7 @@ class ExperimentRunner:
                 raise ValueError(f"No bars for experiment unit {symbol} {trade_date}.")
             provider: Any = None
             if strategy in {"vwap", "optimal", "mpc"}:
-                provider = HistoricalProfileForecaster(
-                    all_bars,
-                    estimator=self.spec.profile_estimator,  # type: ignore[arg-type]
-                    lookback_sessions=self.spec.profile_lookback_sessions,
-                )
+                provider = historical_providers[symbol]
             elif strategy == "oracle-vwap":
                 provider = RealizedVolumeOracleForecaster(day_bars)
             order = ParentOrder(
@@ -127,15 +132,19 @@ class ExperimentRunner:
                 self.spec.start_time,
                 self.spec.end_time,
             )
-            policy = create_policy(
-                strategy,
-                risk_aversion=risk,
-                half_spread=self.spec.half_spread,
-                temporary_impact=impact,
-                volatility=self.spec.volatility,
-                pov_target_rate=self.spec.pov_target_rate,
-                allow_evaluation_only=self.spec.include_oracle,
-            )
+            policy_key = (strategy, risk, impact)
+            policy = policy_cache.get(policy_key)
+            if policy is None:
+                policy = create_policy(
+                    strategy,
+                    risk_aversion=risk,
+                    half_spread=self.spec.half_spread,
+                    temporary_impact=impact,
+                    volatility=self.spec.volatility,
+                    pov_target_rate=self.spec.pov_target_rate,
+                    allow_evaluation_only=self.spec.include_oracle,
+                )
+                policy_cache[policy_key] = policy
             constraints = ExecutionConstraints(
                 self.spec.planned_participation_rate, self.spec.hard_participation_rate
             )
