@@ -1,0 +1,23 @@
+# Replace these manifest paths after `execsim ml build-dataset` and
+# `execsim ml create-splits`. Historical fitting remains disabled by default.
+dataset_manifest_path: data/ml/DATASET_ID/manifest.json
+split_manifest_path: data/ml/DATASET_ID/splits.json
+feature_names:
+  - weekday
+  - month
+  - bucket_index
+  - previous_session_total_volume
+  - rolling_adv
+  - rolling_median_volume
+  - rolling_volatility
+  - previous_session_return
+  - previous_session_range
+  - previous_session_trade_count
+target_name: target_volume_share
+model_family: ridge
+hyperparameter_grid:
+  - alpha: 0.1
+  - alpha: 1.0
+artifact_root: artifacts/models
+random_seed: 17
+allow_historical_training: false

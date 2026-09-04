@@ -1,0 +1,68 @@
+schema_version: 1
+authority:
+  agents: AGENTS.md
+  implementation_standard: docs/standards/implementation.md
+  implementation_specification: docs/SPECIFICATIONS.md
+  navigation: docs/NAVIGATION.md
+  architecture_decisions: docs/ADRs/README.md
+areas:
+  governance:
+    roots: [AGENTS.md, repo_manifest.yaml, scripts/repo_context.py, docs/standards, docs/ADRs, docs/NAVIGATION.md]
+    purpose: Repository authority, component ownership, and deterministic navigation.
+    specifications: [docs/standards/implementation.md, docs/ADRs/README.md]
+    tests: [tests/test_repository_contract.py]
+    verify: [python scripts/repo_context.py --check, python -m pytest tests/test_repository_contract.py]
+  configuration:
+    roots: [configs, src/execsim/config.py]
+    purpose: Versioned runtime, experiment, optimization, cost, reporting, and ML assumptions.
+    specifications: [docs/standards/implementation.md, docs/SPECIFICATIONS.md]
+    tests: [tests/test_config.py]
+    verify: [python -m pytest tests/test_config.py]
+  market_data:
+    roots: [src/execsim/data, data]
+    purpose: Canonical market bars, loading, validation, manifests, and deterministic scenarios.
+    specifications: [docs/standards/implementation.md, docs/DATA_LEAKAGE_CONTRACT.md]
+    tests: [tests/test_data_cleaning.py, tests/test_data_validation.py, tests/test_scenarios.py]
+    verify: [python -m pytest tests/test_data_cleaning.py tests/test_data_validation.py tests/test_scenarios.py]
+  policies:
+    roots: [src/execsim/strategies, src/execsim/policies, src/execsim/forecasting]
+    purpose: Deployable static/adaptive policies, point-in-time contexts, forecasts, and evaluation-only oracles.
+    specifications: [docs/standards/implementation.md, docs/MATHEMATICAL_MODEL.md, docs/DATA_LEAKAGE_CONTRACT.md, docs/ADRs/0002-point-in-time-policy-boundary.md, docs/ADRs/0005-causal-forecast-cache-and-horizon-workspaces.md]
+    tests: [tests/test_twap_schedule.py, tests/test_policies.py, tests/test_forecasts.py]
+    verify: [python -m pytest tests/test_twap_schedule.py tests/test_policies.py tests/test_forecasts.py]
+  optimization:
+    roots: [src/execsim/optimization]
+    purpose: General constrained convex optimizer, analytical reference, and integer projection.
+    specifications: [docs/standards/implementation.md, docs/MATHEMATICAL_MODEL.md, docs/RESEARCH_REFERENCES.md, docs/ADRs/0003-explicit-convex-qp-and-linear-impact.md, docs/ADRs/0005-causal-forecast-cache-and-horizon-workspaces.md]
+    tests: [tests/test_optimization.py]
+    verify: [python -m pytest tests/test_optimization.py]
+  costs:
+    roots: [src/execsim/costs]
+    purpose: Side-aware realized spread and temporary-impact accounting with parameter provenance.
+    specifications: [docs/standards/implementation.md, docs/MATHEMATICAL_MODEL.md]
+    tests: [tests/test_cost_models.py]
+    verify: [python -m pytest tests/test_cost_models.py]
+  simulation:
+    roots: [src/execsim/orders.py, src/execsim/simulator]
+    purpose: Parent orders, execution constraints, realized fills, decision traces, and TCA results.
+    specifications: [docs/standards/implementation.md, docs/MATHEMATICAL_MODEL.md]
+    tests: [tests/test_simulator_basic.py, tests/test_tca_metrics.py]
+    verify: [python -m pytest tests/test_simulator_basic.py tests/test_tca_metrics.py]
+  experiments:
+    roots: [src/execsim/experiments, src/execsim/reporting, scripts/benchmark.py, scripts/profile_performance.py, reports]
+    purpose: Reproducible research grids, statistics, figures, benchmarks, and reports.
+    specifications: [docs/standards/implementation.md, docs/PERFORMANCE.md]
+    tests: [tests/test_experiments.py, tests/test_reporting.py]
+    verify: [python -m pytest tests/test_experiments.py tests/test_reporting.py]
+  ml:
+    roots: [src/execsim/ml]
+    purpose: Point-in-time features, targets, columnar datasets, walk-forward splits, model adapters, training plans, and local artifacts.
+    specifications: [docs/standards/implementation.md, docs/ML_DESIGN.md, docs/DATA_LEAKAGE_CONTRACT.md]
+    tests: [tests/test_ml_infrastructure.py]
+    verify: [python -m pytest tests/test_ml_infrastructure.py]
+  cli:
+    roots: [src/execsim/cli.py]
+    purpose: Human and machine-readable entry points over the same library APIs.
+    specifications: [docs/standards/implementation.md, docs/SPECIFICATIONS.md]
+    tests: [tests/test_smoke.py, tests/test_cli_workflows.py]
+    verify: [python -m pytest tests/test_smoke.py tests/test_cli_workflows.py]

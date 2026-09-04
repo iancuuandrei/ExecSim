@@ -1,0 +1,26 @@
+project_name: execution-cost-sim
+symbols:
+  - AAPL
+  - MSFT
+  - NVDA
+start_date: 2026-03-16
+end_date: 2026-04-14
+timezone: America/New_York
+data_provider: alpaca
+alpaca_feed: sip
+alpaca_adjustment: raw
+data_root: data
+raw_data_dir: data/raw/alpaca/minute_bars
+processed_data_dir: data/processed/alpaca/minute_bars
+manifest_path: data/processed/alpaca/minute_bars/manifest.csv
+reports_dir: reports
+default_bar_timeframe: 1min
+log_level: INFO
+demo_twap:
+  symbol: AAPL
+  trade_date: 2026-03-16
+  side: buy
+  quantity: 5000
+  start_time: "10:00"
+  end_time: "10:30"
+  max_bar_participation_rate: 0.05

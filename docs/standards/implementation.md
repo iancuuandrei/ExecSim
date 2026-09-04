@@ -1,0 +1,235 @@
+# Implementation standard
+
+This living standard records material implementation directions and defines how ExecSim code, specifications, command examples, research claims, and reference documentation are written. Update the direction record in the same change whenever the repository adopts or reverses an architectural, mathematical, dependency, data, or research-method decision.
+
+## Direction record
+
+The active implementation directions are:
+
+| Decision | Direction | Reason |
+|---|---|---|
+| Repository navigation | Use `AGENTS.md`, `repo_manifest.yaml`, `docs/NAVIGATION.md`, and `scripts/repo_context.py`; do not add Nx | A single Python package does not justify a second Node dependency and task graph |
+| Decision history | Record material choices in indexed ADRs and supersede rather than rewrite accepted records | Specifications define current behavior, while ADRs preserve the reason and rejected alternatives |
+| Policy information boundary | Give policies a point-in-time `DecisionContext`, not an unrestricted target-session data frame | The boundary makes future-data access enforceable and testable |
+| Optimization core | Use an explicit OSQP convex quadratic program, with a separate analytical Almgren–Chriss reference | The QP exposes feasibility, participation constraints, matrices, residuals, and deterministic integer projection |
+| Realized cost model | Use half-spread plus linear-in-participation temporary price impact | The resulting total impact cost is transparent, convex, and consistent between planning and simulation |
+| Historical replay | Keep the replayed market path exogenous | Minute bars cannot model counterfactual market response without unsupported assumptions |
+| ML role | Forecast point-in-time volume inputs; keep optimization responsible for trades and constraints | This preserves interpretability and prevents an unrestricted learned trading policy |
+| ML execution in V1 | Build and test the full pipeline on tiny synthetic fixtures, but do not fit repository history | The current task explicitly prohibits real-data training and performance claims |
+| Research output | Use deterministic result fields and separately label wall-clock timing as nondeterministic telemetry | Runtime varies even when schedules and costs are reproducible |
+| Command surface | Use one `simulate --strategy` entry point, grouped `experiment` and `ml` commands, and retain `simulate-twap` as a compatibility alias | A task-oriented hierarchy keeps research workflows discoverable without breaking the original command |
+| Automation | Test Python 3.11 and 3.13 with Ruff, mypy, repository-contract validation, and pytest in GitHub Actions | The matrix covers the supported minimum and current development runtime |
+| Dependency compatibility | Constrain NumPy below 2.4 while Python 3.11 remains supported | Newer NumPy type stubs require syntax beyond the repository's declared type-check target |
+| QP scaling | Enable OSQP adaptive penalty updates while keeping fixed tolerances, iteration bounds, and acceptance checks | The full parameter grid exposed poor convergence with a fixed penalty on differently scaled risk and impact terms |
+| Performance architecture | Cache causally filtered historical matrices and reuse exact-horizon OSQP setups through `OptimalExecutionWorkspace` | Profiling identified repeated forecast reconstruction as dominant; exact-horizon reuse preserves the original integer schedule |
+| QP validation levels | Use structural convexity validation in adaptive MPC and full eigenvalue validation in static or standalone solves | Positive temporary curvature and positive-semidefinite added terms prove convexity without repeated cubic work in the hot path |
+| ML dataset memory | Discover symbols with bounded Arrow batches and build one symbol partition at a time; CLI builds do not retain result rows | This prevents a future multi-symbol, multi-year universe from becoming one pandas DataFrame |
+
+Apply this order of precedence:
+
+1. Preserve mathematical correctness and point-in-time integrity.
+2. Follow repository-specific terms and contracts in this document.
+3. Follow the language-native Python and Markdown conventions configured in `pyproject.toml`.
+4. Apply the broadly useful Microsoft, Google, and GitHub technical-writing practices cited below.
+
+Do not copy vendor-specific product, user-interface, branding, or internal publishing conventions when they do not apply to ExecSim.
+
+For the rationale and consequences behind these directions, use the [architecture decision index](../ADRs/README.md). A material direction change is incomplete until its ADR, this table, specifications, and tests agree.
+
+## Write for the reader
+
+Write for a researcher, quantitative developer, reviewer, or learner who needs to understand and reproduce a result.
+
+- Put the outcome, purpose, or constraint before implementation history.
+- Use active voice and name the actor: “The simulator rejects duplicate bars,” not “Duplicate bars are rejected.”
+- Address the reader as “you” only in task-oriented instructions. Use the component name in reference documentation.
+- Prefer short, direct sentences and one main idea per paragraph.
+- Use plain language without diluting mathematical precision.
+- Define specialized terms and abbreviations on first use.
+- Use one term for one concept. Do not alternate synonyms for variety.
+- Avoid marketing language, filler, idioms, humor, anthropomorphism, and claims such as “powerful,” “smart,” “seamless,” or “production-ready” without measured evidence.
+- State assumptions, units, provenance, limitations, and failure modes close to the claim they qualify.
+
+## Use canonical ExecSim terminology
+
+Use these terms consistently in public APIs, logs, reports, tests, and prose.
+
+| Term | Meaning | Avoid |
+|---|---|---|
+| parent order | The single-asset order objective with side, quantity, date, and execution window | master order, trade request |
+| bucket | One policy decision and execution interval | slice when the interval is meant |
+| bar | The aggregated OHLCV market observation for a bucket | tick, quote |
+| planned quantity | Shares requested by a static plan or adaptive decision | filled amount, target fill |
+| executed quantity | Shares realized after inventory and hard-cap constraints | planned fill |
+| remaining inventory | Parent-order shares not yet executed | position, residual order without definition |
+| forecast volume | Point-in-time expected future market volume | predicted liquidity when only volume is forecast |
+| actual market volume | Realized bar volume used by the fill constraint | available liquidity, because bar volume is only a proxy |
+| planned participation | Planned quantity divided by forecast or actual volume, as explicitly named | participation without its denominator |
+| realized participation | Executed quantity divided by actual market volume | fill ratio |
+| reference price | Bar VWAP or the documented OHLC fallback before modeled costs | midprice, market price |
+| execution price | Reference price plus side-aware modeled spread and impact | fill price when no actual venue fill exists |
+| half-spread | Assumed, measured, estimated, or supplied currency cost per share for crossing one side of the spread | bid-ask spread when only half is used |
+| temporary impact | The execution-price displacement attributed to current-bucket participation | slippage as a catch-all |
+| implementation shortfall | Side-aware execution cost relative to arrival, in currency or basis points | profit and loss |
+| point-in-time | Computed only from information available at the declared cutoff | real-time, leakage-free without proof |
+| deployable policy | An ex-ante policy that obeys the information contract; not a claim of production readiness | live strategy |
+| oracle policy | An evaluation-only hindsight baseline with future information | optimal policy |
+| assumed parameter | A value selected for research sensitivity rather than estimated from data | calibrated parameter |
+
+Use `buy` and `sell` for sides, positive cost for worse execution on either side, shares for quantity, currency per share for price inputs, currency for aggregate costs, basis points for normalized price differences, and fractions in `[0, 1]` for participation.
+
+## Structure documents for scanning
+
+- Use one level-1 heading that names the document.
+- Use sentence case for all headings.
+- Keep heading levels hierarchical. Do not skip from `##` to `####`.
+- Do not end headings with a period or colon.
+- Use descriptive headings that remain meaningful in GitHub’s generated outline.
+- Put purpose and reader outcome first, then prerequisites, procedure or contract, interpretation, limitations, and references.
+- Use numbered lists only for sequences or ranked priorities. Use bullets for unordered sets.
+- Introduce every list and table with a complete sentence.
+- Keep list items grammatically parallel.
+- Use tables when readers compare three or more consistent fields. Do not use a table for prose that reads better as a short list.
+- Use restrained emphasis. Do not use bold text as a substitute for headings.
+- Use descriptive link text, not “click here,” “this,” or a bare URL.
+- Prefer relative repository links in tracked Markdown so links work in clones.
+
+## Write procedures that run as shown
+
+State prerequisites before a procedure. Use numbered steps and begin each step with an imperative verb. Put one action or decision in each step and include the final verification step.
+
+Introduce each command with its purpose:
+
+```text
+Validate the complete test suite:
+```
+
+Then provide a copyable command without a shell prompt:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+- Tag every fenced block with its language or content type.
+- Use obvious uppercase placeholders such as `DATASET_PATH` or `RUN_ID` and explain them after the block.
+- Do not mix optional-argument notation into a command intended for direct copying.
+- Show expected output when it proves success, but keep output separate from the command.
+- Never include credentials, tokens, local secrets, or a real `.env` value.
+- Test every tracked command from the documented working directory.
+- Mark unexecuted commands `NOT RUN`; do not imply that syntactic plausibility is execution evidence.
+
+## Specify every production module
+
+Register every production module in `repo_manifest.yaml`. Specify its behavior in `docs/SPECIFICATIONS.md` or a focused document linked from that file.
+
+Each component specification must cover the applicable fields below:
+
+1. Purpose and non-goals.
+2. Public interface, inputs, outputs, and types.
+3. Units, sign conventions, parameter provenance, and defaults.
+4. Preconditions and validation errors.
+5. State transitions and side effects.
+6. Point-in-time information set and prohibited future data.
+7. Mathematical formula or algorithm, with a primary reference when the choice is not obvious.
+8. Determinism, ordering, seed, hashing, and numerical-tolerance rules.
+9. Capacity, performance, and complexity expectations where material.
+10. Artifact or log schema and compatibility behavior.
+11. Known limitations and deliberately unsupported behavior.
+12. Tests that prove ordinary behavior, boundary cases, and invariants.
+
+Do not describe planned behavior as implemented. Use these exact lifecycle labels where needed:
+
+- `IMPLEMENTED`: code and risk-proportionate tests exist.
+- `PLANNED`: accepted scope without implementation evidence.
+- `EVALUATION_ONLY`: deliberately non-deployable research behavior.
+- `NOT RUN`: the verification command did not execute.
+- `BLOCKED`: a named condition prevents execution.
+
+## Write Python that exposes the model
+
+- Use Python 3.11+ syntax and the `src/` package layout.
+- Use `snake_case` for modules, functions, methods, and variables; `CapWords` for classes; and uppercase names for module constants.
+- Use descriptive public names. Mathematical symbols such as `q`, `x`, `L`, and `D` are acceptable only in tightly scoped derivations that map directly to documented notation.
+- Add type annotations to public functions, protocols, dataclasses, and returned structures.
+- Use a protocol only for a real substitution boundary.
+- Prefer frozen, slotted dataclasses for validated immutable values. Use mutable state only when the lifecycle requires it, such as an MPC warm start.
+- Validate at boundaries and raise specific errors with the invalid concept and expected condition.
+- Keep core simulation independent of reporting and ML imports.
+- Preserve exact integer quantities and deterministic ordering. Never rely on an unordered container for a research artifact.
+- Make numerical tolerances configurable or named. Do not hide a tolerance in a comparison.
+- Keep functions focused on one level of abstraction. Extract formulas when an isolated invariant can be tested.
+- Use vectorized NumPy for measured hot paths, not as a reason to obscure a short, auditable algorithm.
+- Use comments to explain why a choice exists, which information is available, or which paper defines a formula. Do not narrate visible syntax.
+
+Public modules, classes, and non-obvious functions require docstrings. Begin with a one-line purpose. Add concise sections for parameters, returns, raises, units, point-in-time behavior, or references only when they add information not carried by names and types.
+
+## Document mathematics and research claims
+
+- Define notation before the first equation and map each symbol to code names.
+- State units beside parameters and distinguish per-share, per-bucket, per-session, currency, and dimensionless values.
+- State the optimization objective, constraints, feasibility handling, and numerical acceptance criteria.
+- Distinguish a model identity from an empirical claim and a configured assumption.
+- Cite primary papers, standards, official documentation, or first-party sources for material non-obvious choices.
+- Use “matches within tolerance,” not “proves,” for numerical reference comparisons.
+- Label synthetic, fixture, historical-sample, out-of-sample, and production evidence separately.
+- Report the sample size and paired unit before statistical conclusions.
+- Do not call an assumed parameter calibrated or estimated.
+- Do not call an oracle schedule deployable or universally optimal.
+- Do not claim ML quality when only a synthetic pipeline fit ran.
+
+## Write tests as executable specifications
+
+Name tests after observable behavior or an invariant, for example:
+
+```python
+def test_integer_projection_preserves_quantity_and_capacities() -> None:
+    ...
+```
+
+- Keep tests deterministic and independent of network services by default.
+- Use a focused mathematical test for each formula and monotonicity rule.
+- Add explicit leakage tests that introduce forbidden future data and expect rejection.
+- Test both buy and sell sign behavior.
+- Test invalid, zero, boundary, partial-fill, shortened-session, and solver-failure paths.
+- Use approximate comparisons with a named or justified tolerance.
+- Test public behavior instead of private implementation shape unless the internal matrix is itself part of the mathematical contract.
+- Do not delete, skip, weaken, or narrow an existing test to make a gate pass. If the specification changes, explain why the prior expectation was wrong and replace it with a stronger contract test.
+
+## Make content accessible and portable
+
+- Use semantic headings, lists, and tables rather than visual spacing.
+- Give informative images and diagrams meaningful alt text and explain essential information in prose.
+- Do not communicate status by color alone.
+- Avoid directional references such as “above” when a heading or link can identify the content.
+- Use literal, inclusive language and avoid culturally specific idioms or ableist, violent, gendered, or patronizing metaphors.
+- Keep Markdown useful in a local clone even when GitHub-specific rendering is unavailable.
+
+## Review with one checklist
+
+Before a code or documentation checkpoint, verify all applicable statements:
+
+- The terminology matches the canonical table.
+- Public behavior has a current specification and tests.
+- The point-in-time information boundary is explicit.
+- Units, signs, provenance, defaults, and tolerances are visible.
+- Commands are copyable and were executed or labeled accurately.
+- Headings use sentence case and follow a logical hierarchy.
+- Lists are introduced and parallel; tables have a comparison purpose.
+- Links are descriptive and repository links are relative where practical.
+- Claims match the evidence level and name limitations.
+- Ruff, mypy, pytest, and repository-context checks report their actual status.
+
+## Sources
+
+This standard adopts broadly applicable guidance from these official sources:
+
+- [Microsoft Writing Style Guide: top 10 tips](https://learn.microsoft.com/en-us/style-guide/top-10-tips-style-voice)
+- [Microsoft guidance for code examples](https://learn.microsoft.com/en-us/style-guide/developer-content/code-examples)
+- [Microsoft guidance for accessible writing](https://learn.microsoft.com/en-us/style-guide/accessibility/writing-all-abilities)
+- [Google developer documentation style guide](https://developers.google.com/style)
+- [Google guidance for headings and titles](https://developers.google.com/style/headings)
+- [Google guidance for code samples](https://developers.google.com/style/code-samples)
+- [Google Python style guide](https://google.github.io/styleguide/pyguide.html)
+- [GitHub Docs content design principles](https://docs.github.com/en/contributing/writing-for-github-docs/content-design-principles)
+- [GitHub Docs style guide](https://docs.github.com/en/contributing/style-guide-and-content-model/style-guide)
+- [GitHub guidance for repository README files](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes)
