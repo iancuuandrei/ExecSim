@@ -46,6 +46,8 @@ The formation universe is rebuilt from the complete 505-candidate source populat
 
 Every quality record stores `daily_valid`, `minute_exact_full_session`, `token_valid_full_session`, `tca_window_exact`, `early_close`, `provider_gap_count`, `observed_minute_count`, `valid_token_count`, and `invalid_token_reason` separately. SPY uses the same task-resolution contracts.
 
+Before inspecting v2 token counts, the formation diagnostic bands are high at least 95%, medium at least 80% and below 95%, and low below 80% of the 251 standard formation sessions. The bands are descriptive and do not affect daily eligibility or the top-100 rank.
+
 All research questions, geometries, encoder, latent width, sparsity, folds, seeds, metrics, LightGBM design, TCA order and cost assumptions, bootstrap, primary comparisons, causal boundaries, and authorization gates remain as frozen in v1.
 
 ## Rejected alternatives

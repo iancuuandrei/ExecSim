@@ -1,0 +1,1739 @@
+{
+  "daily_completeness_minimum": 0.95,
+  "formation_membership_date": "2021-01-04",
+  "formation_period": [
+    "2021-01-04",
+    "2021-12-31"
+  ],
+  "members": [
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "TSLA",
+      "instrument_id": "sec-cik-0001318605-TSLA",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 20066353480.420273,
+      "median_daily_price": 729.97,
+      "median_daily_share_volume": 25587353.0,
+      "rank": 1
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AAPL",
+      "instrument_id": "sec-cik-0000320193-AAPL",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 12366675430.078537,
+      "median_daily_price": 141.305,
+      "median_daily_share_volume": 90690848.0,
+      "rank": 2
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AMZN",
+      "instrument_id": "sec-cik-0001018724-AMZN",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 11211441351.085121,
+      "median_daily_price": 3341.23,
+      "median_daily_share_volume": 3325883.0,
+      "rank": 3
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "MSFT",
+      "instrument_id": "sec-cik-0000789019-MSFT",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 7466748936.312173,
+      "median_daily_price": 277.16499999999996,
+      "median_daily_share_volume": 27492903.5,
+      "rank": 4
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "NVDA",
+      "instrument_id": "sec-cik-0001045810-NVDA",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 5888989747.101566,
+      "median_daily_price": 512.8800000000001,
+      "median_daily_share_volume": 15666338.0,
+      "rank": 5
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "FB",
+      "instrument_id": "sec-cik-0001326801-FB",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 5661037551.12354,
+      "median_daily_price": 329.365,
+      "median_daily_share_volume": 17817073.0,
+      "rank": 6
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AMD",
+      "instrument_id": "sec-cik-0000002488-AMD",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 4367664832.041995,
+      "median_daily_price": 92.225,
+      "median_daily_share_volume": 46972406.5,
+      "rank": 7
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "GOOGL",
+      "instrument_id": "sec-cik-0001652044-GOOGL",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 3651641676.0279846,
+      "median_daily_price": 2496.2200000000003,
+      "median_daily_share_volume": 1496798.0,
+      "rank": 8
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "GOOG",
+      "instrument_id": "sec-cik-0001652044-GOOG",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 3093646023.4954033,
+      "median_daily_price": 2578.96,
+      "median_daily_share_volume": 1256104.5,
+      "rank": 9
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "BA",
+      "instrument_id": "sec-cik-0000012927-BA",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 2539991859.437065,
+      "median_daily_price": 222.66,
+      "median_daily_share_volume": 11280266.0,
+      "rank": 10
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "JPM",
+      "instrument_id": "sec-cik-0000019617-JPM",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 2159692175.1540422,
+      "median_daily_price": 156.49,
+      "median_daily_share_volume": 13854045.0,
+      "rank": 11
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "V",
+      "instrument_id": "sec-cik-0001403161-V",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 2076043167.6969366,
+      "median_daily_price": 224.23000000000002,
+      "median_daily_share_volume": 9281664.0,
+      "rank": 12
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "PYPL",
+      "instrument_id": "sec-cik-0001633917-PYPL",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 2024365240.3240397,
+      "median_daily_price": 260.03999999999996,
+      "median_daily_share_volume": 7934738.5,
+      "rank": 13
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "NFLX",
+      "instrument_id": "sec-cik-0001065280-NFLX",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 1999093493.2491932,
+      "median_daily_price": 543.33,
+      "median_daily_share_volume": 3522653.5,
+      "rank": 14
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "BAC",
+      "instrument_id": "sec-cik-0000070858-BAC",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 1979038755.109531,
+      "median_daily_price": 40.9,
+      "median_daily_share_volume": 50713366.0,
+      "rank": 15
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "DIS",
+      "instrument_id": "sec-cik-0001744489-DIS",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 1727463694.9470215,
+      "median_daily_price": 176.88,
+      "median_daily_share_volume": 9618004.5,
+      "rank": 16
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "INTC",
+      "instrument_id": "sec-cik-0000050863-INTC",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 1560165557.84344,
+      "median_daily_price": 55.225,
+      "median_daily_share_volume": 28340676.5,
+      "rank": 17
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "MU",
+      "instrument_id": "sec-cik-0000723125-MU",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 1495622246.2216616,
+      "median_daily_price": 80.66,
+      "median_daily_share_volume": 18966516.0,
+      "rank": 18
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CRM",
+      "instrument_id": "sec-cik-0001108524-CRM",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 1458318342.5662327,
+      "median_daily_price": 243.64,
+      "median_daily_share_volume": 5986588.0,
+      "rank": 19
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "MA",
+      "instrument_id": "sec-cik-0001141391-MA",
+      "liquidity_group": 1,
+      "median_daily_dollar_volume": 1445520709.850064,
+      "median_daily_price": 359.485,
+      "median_daily_share_volume": 4002601.0,
+      "rank": 20
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "C",
+      "instrument_id": "sec-cik-0000831001-C",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1444638616.03755,
+      "median_daily_price": 70.13,
+      "median_daily_share_volume": 20930291.5,
+      "rank": 21
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "XOM",
+      "instrument_id": "sec-cik-0002115436-XOM",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1429513819.305141,
+      "median_daily_price": 58.83,
+      "median_daily_share_volume": 25032248.5,
+      "rank": 22
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "BRK.B",
+      "instrument_id": "sec-cik-0001067983-BRK-B",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1361040213.784878,
+      "median_daily_price": 278.78999999999996,
+      "median_daily_share_volume": 5048458.0,
+      "rank": 23
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "JNJ",
+      "instrument_id": "sec-cik-0000200406-JNJ",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1307036178.1341352,
+      "median_daily_price": 164.67000000000002,
+      "median_daily_share_volume": 7866592.5,
+      "rank": 24
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "PFE",
+      "instrument_id": "sec-cik-0000078003-PFE",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1286452447.07024,
+      "median_daily_price": 39.995000000000005,
+      "median_daily_share_volume": 32105295.0,
+      "rank": 25
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "UNH",
+      "instrument_id": "sec-cik-0000731766-UNH",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1281599813.267339,
+      "median_daily_price": 408.595,
+      "median_daily_share_volume": 3226075.5,
+      "rank": 26
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ADBE",
+      "instrument_id": "sec-cik-0000796343-ADBE",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1259320186.130431,
+      "median_daily_price": 569.325,
+      "median_daily_share_volume": 2315707.0,
+      "rank": 27
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "HD",
+      "instrument_id": "sec-cik-0000354950-HD",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1247395206.902034,
+      "median_daily_price": 323.635,
+      "median_daily_share_volume": 4044605.5,
+      "rank": 28
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "WFC",
+      "instrument_id": "sec-cik-0000072971-WFC",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1241021278.4061465,
+      "median_daily_price": 45.75,
+      "median_daily_share_volume": 30060870.5,
+      "rank": 29
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "QCOM",
+      "instrument_id": "sec-cik-0000804328-QCOM",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1225655130.00583,
+      "median_daily_price": 140.335,
+      "median_daily_share_volume": 8789519.0,
+      "rank": 30
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CVX",
+      "instrument_id": "sec-cik-0000093410-CVX",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1165776100.4335485,
+      "median_daily_price": 103.99,
+      "median_daily_share_volume": 11272961.0,
+      "rank": 31
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "WMT",
+      "instrument_id": "sec-cik-0000104169-WMT",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1157914724.816453,
+      "median_daily_price": 141.57999999999998,
+      "median_daily_share_volume": 8153688.5,
+      "rank": 32
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "T",
+      "instrument_id": "sec-cik-0000732717-T",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1153206058.7753806,
+      "median_daily_price": 28.465,
+      "median_daily_share_volume": 41028370.0,
+      "rank": 33
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "PG",
+      "instrument_id": "sec-cik-0000080424-PG",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1131111207.4175591,
+      "median_daily_price": 138.0,
+      "median_daily_share_volume": 8208695.5,
+      "rank": 34
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "VZ",
+      "instrument_id": "sec-cik-0000732712-VZ",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1075461460.8317251,
+      "median_daily_price": 55.66,
+      "median_daily_share_volume": 19313534.5,
+      "rank": 35
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AMAT",
+      "instrument_id": "sec-cik-0000006951-AMAT",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1066295137.336252,
+      "median_daily_price": 134.625,
+      "median_daily_share_volume": 8292476.0,
+      "rank": 36
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CSCO",
+      "instrument_id": "sec-cik-0000858877-CSCO",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1045567539.8850715,
+      "median_daily_price": 53.605000000000004,
+      "median_daily_share_volume": 19633520.5,
+      "rank": 37
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "GS",
+      "instrument_id": "sec-cik-0000886982-GS",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1036423203.4401,
+      "median_daily_price": 373.995,
+      "median_daily_share_volume": 2883141.5,
+      "rank": 38
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "GM",
+      "instrument_id": "sec-cik-0001467858-GM",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 1009776238.1748779,
+      "median_daily_price": 56.595,
+      "median_daily_share_volume": 17890297.5,
+      "rank": 39
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "F",
+      "instrument_id": "sec-cik-0000037996-F",
+      "liquidity_group": 2,
+      "median_daily_dollar_volume": 990042500.987643,
+      "median_daily_price": 13.43,
+      "median_daily_share_volume": 73295358.0,
+      "rank": 40
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "NKE",
+      "instrument_id": "sec-cik-0000320187-NKE",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 974572440.755805,
+      "median_daily_price": 148.42000000000002,
+      "median_daily_share_volume": 6460899.0,
+      "rank": 41
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CMCSA",
+      "instrument_id": "sec-cik-0001166691-CMCSA",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 974043770.3039815,
+      "median_daily_price": 55.085,
+      "median_daily_share_volume": 17886072.5,
+      "rank": 42
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "MRK",
+      "instrument_id": "sec-cik-0000310158-MRK",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 971518531.97299,
+      "median_daily_price": 77.025,
+      "median_daily_share_volume": 12383457.0,
+      "rank": 43
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "MS",
+      "instrument_id": "sec-cik-0000895421-MS",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 933957766.1375625,
+      "median_daily_price": 92.215,
+      "median_daily_share_volume": 10438220.0,
+      "rank": 44
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AVGO",
+      "instrument_id": "sec-cik-0001730168-AVGO",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 928000545.9997771,
+      "median_daily_price": 480.345,
+      "median_daily_share_volume": 1931602.0,
+      "rank": 45
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "TWTR",
+      "instrument_id": "sec-cik-0001418091-TWTR",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 926064197.626019,
+      "median_daily_price": 62.105000000000004,
+      "median_daily_share_volume": 15646126.0,
+      "rank": 46
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "COST",
+      "instrument_id": "sec-cik-0000909832-COST",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 922929540.212947,
+      "median_daily_price": 398.9,
+      "median_daily_share_volume": 2212302.5,
+      "rank": 47
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ORCL",
+      "instrument_id": "sec-cik-0001341439-ORCL",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 907690814.956303,
+      "median_daily_price": 84.565,
+      "median_daily_share_volume": 11497168.5,
+      "rank": 48
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "KO",
+      "instrument_id": "sec-cik-0000021344-KO",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 886027537.5929165,
+      "median_daily_price": 54.44,
+      "median_daily_share_volume": 16658721.0,
+      "rank": 49
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "TXN",
+      "instrument_id": "sec-cik-0000097476-TXN",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 874893720.560988,
+      "median_daily_price": 188.41500000000002,
+      "median_daily_share_volume": 4701935.0,
+      "rank": 50
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "LRCX",
+      "instrument_id": "sec-cik-0000707549-LRCX",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 874576111.384134,
+      "median_daily_price": 608.255,
+      "median_daily_share_volume": 1477390.0,
+      "rank": 51
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "GE",
+      "instrument_id": "sec-cik-0000040545-GE",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 852255005.017182,
+      "median_daily_price": 13.57,
+      "median_daily_share_volume": 49315156.5,
+      "rank": 52
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "TMO",
+      "instrument_id": "sec-cik-0000097745-TMO",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 822306627.7595229,
+      "median_daily_price": 514.645,
+      "median_daily_share_volume": 1582708.5,
+      "rank": 53
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ABBV",
+      "instrument_id": "sec-cik-0001551152-ABBV",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 803992381.958336,
+      "median_daily_price": 112.33,
+      "median_daily_share_volume": 7147526.5,
+      "rank": 54
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "BKNG",
+      "instrument_id": "sec-cik-0001075531-BKNG",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 786995988.2933085,
+      "median_daily_price": 2301.21,
+      "median_daily_share_volume": 346484.0,
+      "rank": 55
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CCL",
+      "instrument_id": "sec-cik-0000815097-CCL",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 775812801.645092,
+      "median_daily_price": 23.64,
+      "median_daily_share_volume": 33204821.0,
+      "rank": 56
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "PEP",
+      "instrument_id": "sec-cik-0000077476-PEP",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 764078333.5537364,
+      "median_daily_price": 149.01999999999998,
+      "median_daily_share_volume": 5194830.5,
+      "rank": 57
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "FCX",
+      "instrument_id": "sec-cik-0000831259-FCX",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 757425730.610809,
+      "median_daily_price": 36.515,
+      "median_daily_share_volume": 20882673.5,
+      "rank": 58
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "BMY",
+      "instrument_id": "sec-cik-0000014272-BMY",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 750204816.0753275,
+      "median_daily_price": 62.745000000000005,
+      "median_daily_share_volume": 11753656.5,
+      "rank": 59
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "LOW",
+      "instrument_id": "sec-cik-0000060667-LOW",
+      "liquidity_group": 3,
+      "median_daily_dollar_volume": 748676094.1128495,
+      "median_daily_price": 195.785,
+      "median_daily_share_volume": 3829034.5,
+      "rank": 60
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "TGT",
+      "instrument_id": "sec-cik-0000027419-TGT",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 746938587.3648095,
+      "median_daily_price": 231.24,
+      "median_daily_share_volume": 3314975.5,
+      "rank": 61
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "NOW",
+      "instrument_id": "sec-cik-0001373715-NOW",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 723727073.9622009,
+      "median_daily_price": 570.465,
+      "median_daily_share_volume": 1245752.0,
+      "rank": 62
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CAT",
+      "instrument_id": "sec-cik-0000018230-CAT",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 723111577.639097,
+      "median_daily_price": 209.14999999999998,
+      "median_daily_share_volume": 3455149.5,
+      "rank": 63
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "LLY",
+      "instrument_id": "sec-cik-0000059478-LLY",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 719202787.7958269,
+      "median_daily_price": 229.555,
+      "median_daily_share_volume": 3289701.5,
+      "rank": 64
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "DHR",
+      "instrument_id": "sec-cik-0000313616-DHR",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 706958553.139863,
+      "median_daily_price": 275.075,
+      "median_daily_share_volume": 2598160.5,
+      "rank": 65
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "IBM",
+      "instrument_id": "sec-cik-0000051143-IBM",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 703266393.494184,
+      "median_daily_price": 136.075,
+      "median_daily_share_volume": 5276660.0,
+      "rank": 66
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "SBUX",
+      "instrument_id": "sec-cik-0000829224-SBUX",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 695651035.5867591,
+      "median_daily_price": 112.485,
+      "median_daily_share_volume": 6245956.5,
+      "rank": 67
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "MCD",
+      "instrument_id": "sec-cik-0000063908-MCD",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 695457831.0706595,
+      "median_daily_price": 235.01,
+      "median_daily_share_volume": 3014253.5,
+      "rank": 68
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AAL",
+      "instrument_id": "sec-cik-0000006201-AAL",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 685874907.879699,
+      "median_daily_price": 20.445,
+      "median_daily_share_volume": 33982514.5,
+      "rank": 69
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CHTR",
+      "instrument_id": "sec-cik-0001091667-CHTR",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 684257477.642761,
+      "median_daily_price": 682.55,
+      "median_daily_share_volume": 981982.0,
+      "rank": 70
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ABT",
+      "instrument_id": "sec-cik-0000001800-ABT",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 683122854.989598,
+      "median_daily_price": 120.85,
+      "median_daily_share_volume": 5582646.0,
+      "rank": 71
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "UNP",
+      "instrument_id": "sec-cik-0000100885-UNP",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 673076215.401477,
+      "median_daily_price": 221.04,
+      "median_daily_share_volume": 3068863.5,
+      "rank": 72
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AMGN",
+      "instrument_id": "sec-cik-0000318154-AMGN",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 662739614.3012335,
+      "median_daily_price": 233.78500000000003,
+      "median_daily_share_volume": 2861949.5,
+      "rank": 73
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ACN",
+      "instrument_id": "sec-cik-0001467373-ACN",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 657440218.919401,
+      "median_daily_price": 305.12,
+      "median_daily_share_volume": 2170193.5,
+      "rank": 74
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "INTU",
+      "instrument_id": "sec-cik-0000896878-INTU",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 646353863.622606,
+      "median_daily_price": 498.21,
+      "median_daily_share_volume": 1356741.5,
+      "rank": 75
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "NEE",
+      "instrument_id": "sec-cik-0000753308-NEE",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 631436030.857419,
+      "median_daily_price": 79.77000000000001,
+      "median_daily_share_volume": 7841168.0,
+      "rank": 76
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "TMUS",
+      "instrument_id": "sec-cik-0001283699-TMUS",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 625493340.6117184,
+      "median_daily_price": 129.64,
+      "median_daily_share_volume": 4784387.5,
+      "rank": 77
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "UAL",
+      "instrument_id": "sec-cik-0000100517-UAL",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 621303473.827466,
+      "median_daily_price": 48.35,
+      "median_daily_share_volume": 12929897.5,
+      "rank": 78
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ATVI",
+      "instrument_id": "sec-cik-0000718877-ATVI",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 619018784.6941736,
+      "median_daily_price": 90.47999999999999,
+      "median_daily_share_volume": 7130972.5,
+      "rank": 79
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "FDX",
+      "instrument_id": "sec-cik-0001048911-FDX",
+      "liquidity_group": 4,
+      "median_daily_dollar_volume": 604712168.6344965,
+      "median_daily_price": 261.975,
+      "median_daily_share_volume": 2260162.0,
+      "rank": 80
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "MDT",
+      "instrument_id": "sec-cik-0001613103-MDT",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 602391781.806489,
+      "median_daily_price": 123.17500000000001,
+      "median_daily_share_volume": 4883108.0,
+      "rank": 81
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "DE",
+      "instrument_id": "sec-cik-0000315189-DE",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 601864562.079376,
+      "median_daily_price": 352.71500000000003,
+      "median_daily_share_volume": 1711358.5,
+      "rank": 82
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "VIAC",
+      "instrument_id": "sec-cik-0000813828-VIAC",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 601469142.04881,
+      "median_daily_price": 40.75,
+      "median_daily_share_volume": 15044727.0,
+      "rank": 83
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AXP",
+      "instrument_id": "sec-cik-0000004962-AXP",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 596623646.824091,
+      "median_daily_price": 161.75,
+      "median_daily_share_volume": 3756143.5,
+      "rank": 84
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "HON",
+      "instrument_id": "sec-cik-0000773840-HON",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 592352372.207229,
+      "median_daily_price": 218.935,
+      "median_daily_share_volume": 2664344.0,
+      "rank": 85
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "SPGI",
+      "instrument_id": "sec-cik-0000064040-SPGI",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 590924381.670121,
+      "median_daily_price": 411.35,
+      "median_daily_share_volume": 1467096.5,
+      "rank": 86
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "UPS",
+      "instrument_id": "sec-cik-0001090727-UPS",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 571333482.6493981,
+      "median_daily_price": 194.095,
+      "median_daily_share_volume": 3095583.0,
+      "rank": 87
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ADI",
+      "instrument_id": "sec-cik-0000006281-ADI",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 570196704.18693,
+      "median_daily_price": 164.305,
+      "median_daily_share_volume": 3428929.5,
+      "rank": 88
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "LMT",
+      "instrument_id": "sec-cik-0000936468-LMT",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 554237011.598707,
+      "median_daily_price": 356.06,
+      "median_daily_share_volume": 1503482.5,
+      "rank": 89
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "COP",
+      "instrument_id": "sec-cik-0001163165-COP",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 551827756.444041,
+      "median_daily_price": 56.849999999999994,
+      "median_daily_share_volume": 9735893.0,
+      "rank": 90
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "CVS",
+      "instrument_id": "sec-cik-0000064803-CVS",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 520428733.80842805,
+      "median_daily_price": 83.79,
+      "median_daily_share_volume": 6353599.0,
+      "rank": 91
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "DAL",
+      "instrument_id": "sec-cik-0000027904-DAL",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 514347964.161298,
+      "median_daily_price": 42.3,
+      "median_daily_share_volume": 12213934.5,
+      "rank": 92
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ETSY",
+      "instrument_id": "sec-cik-0001370637-ETSY",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 513936259.5657195,
+      "median_daily_price": 209.51999999999998,
+      "median_daily_share_volume": 2560236.0,
+      "rank": 93
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "SCHW",
+      "instrument_id": "sec-cik-0000316709-SCHW",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 511671134.1189865,
+      "median_daily_price": 71.66999999999999,
+      "median_daily_share_volume": 7220951.5,
+      "rank": 94
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "GILD",
+      "instrument_id": "sec-cik-0000882095-GILD",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 507743684.42337394,
+      "median_daily_price": 67.48,
+      "median_daily_share_volume": 7563657.0,
+      "rank": 95
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "ISRG",
+      "instrument_id": "sec-cik-0001035267-ISRG",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 507478823.223,
+      "median_daily_price": 802.36,
+      "median_daily_share_volume": 637241.0,
+      "rank": 96
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "AMT",
+      "instrument_id": "sec-cik-0001053507-AMT",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 507007618.427804,
+      "median_daily_price": 265.71000000000004,
+      "median_daily_share_volume": 1955068.5,
+      "rank": 97
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "RTX",
+      "instrument_id": "sec-cik-0000101829-RTX",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 506285842.1583175,
+      "median_daily_price": 84.83500000000001,
+      "median_daily_share_volume": 6195537.5,
+      "rank": 98
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "LIN",
+      "instrument_id": "sec-cik-0001707925-LIN",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 505675369.59868944,
+      "median_daily_price": 296.29499999999996,
+      "median_daily_share_volume": 1764665.0,
+      "rank": 99
+    },
+    {
+      "daily_completeness": 1.0,
+      "formation_symbol": "FIS",
+      "instrument_id": "sec-cik-0001136893-FIS",
+      "liquidity_group": 5,
+      "median_daily_dollar_volume": 500032508.02726555,
+      "median_daily_price": 133.975,
+      "median_daily_share_volume": 3785204.5,
+      "rank": 100
+    }
+  ],
+  "paper_config_hash": "1ad2c6216a22d2c546309f6a1e8238e30bbe23e1fec4e6c5d79a7854156434e8",
+  "protocol_id": "sparse-jepa-v2",
+  "ranking_available_after": "2021-12-31",
+  "schema_version": "paper-universe-v2",
+  "source_hashes": [
+    "24c3f06a3aa68c0df21d9567983c59139d827c24ae1029bee4d7bf204eaff513",
+    "323af75c2d85b7ffa02bd57b511518e0a3cc773d5b2e687e6bcead37d2fcd282",
+    "cc0dce538534bf18f90d67bae42ad422bbd85a0c43b9642a7135826238e2fc35",
+    "812597c1d11f0be0204528090279a8d9355792e0b7a0066473b36f2a0c6b0d31"
+  ],
+  "status": "complete",
+  "symbol_history": [
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000001800-ABT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ABT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000002488-AMD",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AMD"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000004962-AXP",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AXP"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000006201-AAL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AAL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000006281-ADI",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ADI"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000006951-AMAT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AMAT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000012927-BA",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "BA"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000014272-BMY",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "BMY"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000018230-CAT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CAT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000019617-JPM",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "JPM"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000021344-KO",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "KO"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000027419-TGT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "TGT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000027904-DAL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "DAL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000037996-F",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "F"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000040545-GE",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "GE"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000050863-INTC",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "INTC"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000051143-IBM",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "IBM"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000059478-LLY",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "LLY"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000060667-LOW",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "LOW"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000063908-MCD",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "MCD"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000064040-SPGI",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "SPGI"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000064803-CVS",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CVS"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000070858-BAC",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "BAC"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000072971-WFC",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "WFC"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000077476-PEP",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "PEP"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000078003-PFE",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "PFE"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000080424-PG",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "PG"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000093410-CVX",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CVX"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000097476-TXN",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "TXN"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000097745-TMO",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "TMO"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000100517-UAL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "UAL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000100885-UNP",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "UNP"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000101829-RTX",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "RTX"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000104169-WMT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "WMT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000200406-JNJ",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "JNJ"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000310158-MRK",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "MRK"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000313616-DHR",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "DHR"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000315189-DE",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "DE"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000316709-SCHW",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "SCHW"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000318154-AMGN",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AMGN"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000320187-NKE",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "NKE"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000320193-AAPL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AAPL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000354950-HD",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "HD"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000707549-LRCX",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "LRCX"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000718877-ATVI",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ATVI"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000723125-MU",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "MU"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000731766-UNH",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "UNH"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000732712-VZ",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "VZ"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000732717-T",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "T"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000753308-NEE",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "NEE"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000773840-HON",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "HON"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000789019-MSFT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "MSFT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000796343-ADBE",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ADBE"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000804328-QCOM",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "QCOM"
+    },
+    {
+      "end": "2022-02-16",
+      "instrument_id": "sec-cik-0000813828-VIAC",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "VIAC"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000813828-VIAC",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2022-02-17",
+      "symbol": "PARA"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000815097-CCL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CCL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000829224-SBUX",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "SBUX"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000831001-C",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "C"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000831259-FCX",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "FCX"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000858877-CSCO",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CSCO"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000882095-GILD",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "GILD"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000886982-GS",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "GS"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000895421-MS",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "MS"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000896878-INTU",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "INTU"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000909832-COST",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "COST"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0000936468-LMT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "LMT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001018724-AMZN",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AMZN"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001035267-ISRG",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ISRG"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001045810-NVDA",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "NVDA"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001048911-FDX",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "FDX"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001053507-AMT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AMT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001065280-NFLX",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "NFLX"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001067983-BRK-B",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "BRK.B"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001075531-BKNG",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "BKNG"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001090727-UPS",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "UPS"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001091667-CHTR",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CHTR"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001108524-CRM",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CRM"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001136893-FIS",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "FIS"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001141391-MA",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "MA"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001163165-COP",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "COP"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001166691-CMCSA",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "CMCSA"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001283699-TMUS",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "TMUS"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001318605-TSLA",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "TSLA"
+    },
+    {
+      "end": "2022-06-07",
+      "instrument_id": "sec-cik-0001326801-FB",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "FB"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001326801-FB",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2022-06-08",
+      "symbol": "META"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001341439-ORCL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ORCL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001370637-ETSY",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ETSY"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001373715-NOW",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "NOW"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001403161-V",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "V"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001418091-TWTR",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "TWTR"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001467373-ACN",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ACN"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001467858-GM",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "GM"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001551152-ABBV",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "ABBV"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001613103-MDT",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "MDT"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001633917-PYPL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "PYPL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001652044-GOOG",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "GOOG"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001652044-GOOGL",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "GOOGL"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001707925-LIN",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "LIN"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001730168-AVGO",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "AVGO"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0001744489-DIS",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "DIS"
+    },
+    {
+      "end": "2025-12-31",
+      "instrument_id": "sec-cik-0002115436-XOM",
+      "source": "https://raw.githubusercontent.com/lawcal/sp500-components-history/ed4cf46e5ec5bb02e709aa08ee8a3a218d1b7d19/data/components_history.csv#sha256=0c248c94e708f33a6235688c47aadfccc0d7779c545fd65c6c8b698dcf964c1b",
+      "start": "2021-01-04",
+      "symbol": "XOM"
+    }
+  ],
+  "target_size": 100,
+  "universe_id": "universe-v2-31627465929b0ea9"
+}

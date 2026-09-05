@@ -365,5 +365,11 @@ def _validate_v2_quality_sections(data: dict[str, Any], sequence: dict[str, Any]
         or sequence.get("realized_volatility") != "observed_close_log_return_sum_of_squares"
         or sequence.get("missing_minute_policy") != "never_zero_fill_or_interpolate"
         or sequence.get("primary_session_rule") != "all_26_tokens_valid_and_standard_xnys_session"
+        or sequence.get("token_completeness_bands")
+        != {
+            "high_minimum": 0.95,
+            "medium_minimum": 0.80,
+            "low_maximum_exclusive": 0.80,
+        }
     ):
         raise ValueError("V2 sequence configuration contradicts the token-quality protocol.")

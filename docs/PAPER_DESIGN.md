@@ -59,6 +59,8 @@ sqrt(sum((log(close_i) - log(close_(i-1)))^2 for consecutive observed closes))
 
 This is an observed-grid realized-variation convention: a return across an absent provider minute is retained as one gap-spanning return and is not represented as a regular one-minute return or elapsed-time normalized. The previous valid token close supplies the cross-token return. All 26 tokens and every required cross-token input must be valid. Early closes remain outside the primary 26-token experiment. A 385-row session can therefore be representation-valid even though it is not exact at minute resolution.
 
+Formation-year token completeness uses the 251 predeclared standard-session denominator. Before the token scan, the diagnostic bands are frozen as high at least 95%, medium at least 80% but below 95%, and low below 80%. These labels describe data availability only and cannot select the universe or tune a model.
+
 Full-session minute exactness independently requires every expected XNYS regular-session timestamp exactly once, in order, with one instrument/date, exact timezone, finite schema values, positive prices, nonnegative counts and volume, and the OHLC inequalities. The primary TCA contract applies the same strict rule only to the simulator's consumed interval: start-inclusive 10:30 through end-exclusive 15:30, or exactly 300 timestamps ending at 15:29. TCA never imputes prices, capacity, or fills. Consequently, the representation sample may be larger than the TCA complete-case sample.
 
 The stored token tensor retains these 18 causal observations:
