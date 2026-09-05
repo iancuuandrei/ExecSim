@@ -106,14 +106,28 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         acquire_chunk,
         create_alpaca_sip_fetcher,
         monthly_chunks,
+        probe_alpaca_sip_entitlement,
     )
+    from execsim.data.paper.planning import build_acquisition_plan
     from execsim.data.paper.schemas import PaperDataConfig
+    from execsim.data.paper.sources import acquire_constituent_identity_sources
 
     config.authorize("network", cli_enabled=cli_enabled)
     snapshot_path = Path(config.data["constituent_snapshot"])
     ticker_path = Path(config.data["ticker_history"])
+    formation_start = _as_date(config.data["formation_period"][0])
+    formation_end = _as_date(config.data["formation_period"][1])
+    target_start = _as_date(config.data["target_period"][0])
+    target_end = _as_date(config.data["target_period"][1])
     if not snapshot_path.is_file() or not ticker_path.is_file():
-        raise RuntimeError("BLOCKED: constituent snapshot or ticker history is unavailable.")
+        acquire_constituent_identity_sources(
+            formation_date=formation_start,
+            target_end=target_end,
+            snapshot_output=snapshot_path,
+            ticker_history_output=ticker_path,
+            receipt_output=config.artifact_root / "acquisition" / "formation-source.json",
+            spy_instrument_id=str(config.data["spy_instrument_id"]),
+        )
     snapshot = ingest_constituent_snapshot(snapshot_path)
     intervals = _symbol_intervals(pd.read_parquet(ticker_path))
     validate_symbol_history(intervals)
@@ -124,13 +138,34 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         timezone=cast(Any, config.data["timezone"]),
         adjustment=cast(Any, config.data["adjustment"]),
         extended_hours=bool(config.data["extended_hours"]),
-        formation_start=_as_date(config.data["formation_period"][0]),
-        formation_end=_as_date(config.data["formation_period"][1]),
-        target_start=_as_date(config.data["target_period"][0]),
-        target_end=_as_date(config.data["target_period"][1]),
+        formation_start=formation_start,
+        formation_end=formation_end,
+        target_start=target_start,
+        target_end=target_end,
         allow_network=True,
         paper_config_hash=config.config_hash,
     )
+    acquisition_root = config.artifact_root / "acquisition"
+    plan = build_acquisition_plan(
+        snapshot=snapshot,
+        intervals=intervals,
+        formation_start=formation_start,
+        formation_end=formation_end,
+        target_start=target_start,
+        target_end=target_end,
+        target_universe_size=int(config.data["universe_size"]),
+        spy_instrument_id=str(config.data["spy_instrument_id"]),
+        output_directory=acquisition_root,
+        paper_config_hash=config.config_hash,
+    )
+    probe_path = acquisition_root / "alpaca-sip-probe.json"
+    probe = (
+        read_json(probe_path)
+        if probe_path.is_file()
+        else probe_alpaca_sip_entitlement(data, cli_enabled=True, output=probe_path)
+    )
+    if probe.get("paper_config_hash") != config.config_hash or probe.get("status") != "PASS":
+        raise ValueError("Existing Alpaca SIP probe is incompatible with this paper run.")
     fetcher = create_alpaca_sip_fetcher()
     spy_id = str(config.data["spy_instrument_id"])
     formation_ids = tuple(dict.fromkeys((*snapshot["instrument_id"].astype(str), spy_id)))
@@ -147,7 +182,7 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
     )
     universe_path = Path(config.data["universe_manifest"])
     universe_result: dict[str, object] | str = "reused"
-    if not universe_path.is_file():
+    if not _is_frozen_universe(universe_path, config_hash=config.config_hash):
         universe_result = build_universe_stage(config)
     universe = read_json(universe_path)
     target_ids = tuple(
@@ -168,6 +203,8 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         "status": "SOFTWARE READY",
         "formation_chunks": formation_chunks,
         "target_chunks": target_chunks,
+        "acquisition_plan": plan,
+        "provider_probe": probe,
         "universe": universe_result,
         "formation_output": str(config.data["formation_corpus_root"]),
         "target_output": str(config.data["target_corpus_root"]),
@@ -1601,13 +1638,15 @@ def run_authorized_stages(
     universe = Path(config.data["universe_manifest"])
     formation_root = Path(config.data["formation_corpus_root"])
     target_root = Path(config.data["target_corpus_root"])
-    if not universe.is_file() and not _has_parquet_corpus(formation_root):
+    if not _is_frozen_universe(
+        universe, config_hash=config.config_hash
+    ) and not _has_parquet_corpus(formation_root):
         if config.allow_network:
             results["download_data"] = download_data_stage(config, cli_enabled=network_cli_enabled)
         else:
             results["download_data"] = "DATA NOT ACQUIRED"
             return results
-    if not universe.is_file():
+    if not _is_frozen_universe(universe, config_hash=config.config_hash):
         results["build_universe"] = build_universe_stage(config)
     else:
         results["build_universe"] = "reused"
@@ -1841,6 +1880,19 @@ def _has_parquet_corpus(path: Path) -> bool:
     return path.is_dir() and (
         next(path.rglob("*.parquet"), None) is not None
         or next(path.rglob("*.response"), None) is not None
+    )
+
+
+def _is_frozen_universe(path: Path, *, config_hash: str) -> bool:
+    """Reject the tracked NOT RUN placeholder and incompatible empirical manifests."""
+    if not path.is_file():
+        return False
+    payload = read_json(path)
+    return (
+        payload.get("status") == "complete"
+        and payload.get("paper_config_hash") == config_hash
+        and isinstance(payload.get("members"), list)
+        and len(payload["members"]) == 100
     )
 
 

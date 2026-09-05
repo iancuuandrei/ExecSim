@@ -1,7 +1,7 @@
 paper_run_id: sparse-jepa-v1
 artifact_root: artifacts/paper
 report_root: reports/paper/sparse_jepa
-allow_network: false
+allow_network: true
 allow_historical_training: false
 allow_full_paper_run: false
 provider: alpaca

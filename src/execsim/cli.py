@@ -395,9 +395,15 @@ def _paper(args: argparse.Namespace) -> int:
             print(json.dumps(result, indent=2, default=str))
             return 1 if result.get("valid") is False else 0
     plan = build_compute_plan(
-        network_enabled=config.allow_network,
-        historical_training_enabled=config.allow_historical_training,
-        full_run_enabled=config.allow_full_paper_run,
+        network_enabled=(config.allow_network and args.enable_network and not args.dry_run),
+        historical_training_enabled=(
+            config.allow_historical_training
+            and args.enable_historical_training
+            and not args.dry_run
+        ),
+        full_run_enabled=(
+            config.allow_full_paper_run and args.enable_full_paper_run and not args.dry_run
+        ),
     )
     payload = {
         "command": args.paper_command,

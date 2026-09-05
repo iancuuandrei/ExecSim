@@ -114,13 +114,56 @@ def load_paper_config(path: Path) -> PaperRunConfig:
     freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
     if not isinstance(freeze, dict):
         raise TypeError("Paper design freeze must contain a JSON object.")
-    specification = root.parents[2] / str(freeze["source_specification"])
-    if file_sha256(specification) != freeze.get("source_specification_sha256"):
-        raise ValueError("Paper design freeze does not match its normative specification.")
+    _validate_design_freeze(root, sections, freeze_path, freeze)
     _validate_sections(sections)
     return PaperRunConfig(
         root, sections, stable_hash({"sections": sections, "freeze": freeze}), freeze
     )
+
+
+def _validate_design_freeze(
+    root: Path,
+    sections: dict[str, dict[str, Any]],
+    freeze_path: Path,
+    freeze: dict[str, Any],
+) -> None:
+    """Verify the one-time protocol receipt, its sidecar, and every frozen source."""
+    if (
+        freeze.get("schema_version") != "paper-design-freeze-v2"
+        or freeze.get("protocol_id") != "sparse-jepa-v1"
+        or freeze.get("protocol_version") != 1
+        or freeze.get("status") != "PROTOCOL_FROZEN"
+    ):
+        raise ValueError("Paper design freeze identity is invalid.")
+    sidecar = freeze_path.with_suffix(".sha256")
+    if not sidecar.is_file():
+        raise FileNotFoundError(f"Paper design freeze checksum is missing: {sidecar}")
+    fields = sidecar.read_text(encoding="utf-8").strip().split()
+    if len(fields) != 2 or fields[1] != freeze_path.name:
+        raise ValueError("Paper design freeze checksum sidecar is malformed.")
+    if fields[0] != file_sha256(freeze_path):
+        raise ValueError("Paper design freeze checksum does not match immutable bytes.")
+    if freeze.get("paper_config_sha256") != stable_hash({"sections": sections}):
+        raise ValueError("Paper design freeze does not match the six normative YAML files.")
+    repository_root = root.parents[2]
+    documents = freeze.get("normative_document_sha256")
+    if not isinstance(documents, dict) or not documents:
+        raise ValueError("Paper design freeze must bind its normative documents.")
+    mismatches = [
+        relative
+        for relative, expected in documents.items()
+        if not isinstance(relative, str)
+        or not isinstance(expected, str)
+        or file_sha256(repository_root / relative) != expected
+    ]
+    if mismatches:
+        raise ValueError(f"Paper design freeze normative document mismatch: {sorted(mismatches)}")
+    specification = str(freeze.get("source_specification", ""))
+    if (
+        documents.get(specification) != freeze.get("source_specification_sha256")
+        or not specification
+    ):
+        raise ValueError("Paper design freeze does not match its normative specification.")
 
 
 def _validate_sections(sections: dict[str, dict[str, Any]]) -> None:

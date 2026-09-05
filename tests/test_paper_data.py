@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -19,11 +21,13 @@ from execsim.data.paper.partitions import (
     resolve_fold_partition,
     validate_fold_membership,
 )
+from execsim.data.paper.planning import build_acquisition_plan
 from execsim.data.paper.schemas import (
     InstrumentSymbolInterval,
     PaperDataConfig,
     ProviderResponse,
 )
+from execsim.data.paper.sources import acquire_constituent_identity_sources
 from execsim.data.paper.universe import select_frozen_universe
 from execsim.data.paper.validation import (
     classify_session,
@@ -316,3 +320,74 @@ def test_exact_xnys_grid_rejects_compensating_extra_timezone_and_order_corruptio
     duplicated = frame.copy()
     duplicated.loc[1, "timestamp"] = duplicated.loc[0, "timestamp"]
     assert any("duplicate" in error for error in validate_exact_xnys_session(duplicated))
+
+
+def test_pinned_constituent_source_builds_snapshot_identity_and_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = [
+        {
+            "symbol": f"S{index:03d}",
+            "cik": f"{index + 1:010d}",
+            "name": f"Issuer {index}",
+            "sector": "industrials",
+            "date_added": "2020-01-01",
+            "date_removed": "",
+            "created_at": "2020-01-01",
+        }
+        for index in range(500)
+    ]
+    rows.append(
+        {
+            **rows[0],
+            "symbol": "RENAMED",
+            "created_at": "2022-06-01",
+        }
+    )
+    content = pd.DataFrame(rows).to_csv(index=False).encode()
+    monkeypatch.setattr(
+        "execsim.data.paper.sources.COMPONENTS_SHA256", hashlib.sha256(content).hexdigest()
+    )
+    snapshot_path = tmp_path / "formation" / "constituents.parquet"
+    ticker_path = tmp_path / "formation" / "ticker_history.parquet"
+    receipt = acquire_constituent_identity_sources(
+        formation_date=date(2021, 1, 4),
+        target_end=date(2025, 12, 31),
+        snapshot_output=snapshot_path,
+        ticker_history_output=ticker_path,
+        receipt_output=tmp_path / "formation-source.json",
+        spy_instrument_id="benchmark-spy",
+        content=content,
+    )
+    snapshot = pd.read_parquet(snapshot_path)
+    ticker = pd.read_parquet(ticker_path)
+    intervals = tuple(
+        InstrumentSymbolInterval(
+            row.instrument_id,
+            row.symbol,
+            date.fromisoformat(row.start),
+            date.fromisoformat(row.end),
+            row.source,
+        )
+        for row in ticker.itertuples(index=False)
+    )
+    plan = build_acquisition_plan(
+        snapshot=snapshot,
+        intervals=intervals,
+        formation_start=date(2021, 1, 4),
+        formation_end=date(2021, 12, 31),
+        target_start=date(2022, 1, 3),
+        target_end=date(2025, 12, 31),
+        target_universe_size=100,
+        spy_instrument_id="benchmark-spy",
+        output_directory=tmp_path / "plan",
+        paper_config_hash="f" * 64,
+    )
+
+    assert receipt["snapshot_rows"] == 500
+    assert ticker.loc[ticker["instrument_id"].str.endswith("S000"), "symbol"].tolist() == [
+        "S000",
+        "RENAMED",
+    ]
+    assert plan["formation"]["candidate_instruments_including_spy"] == 501
+    assert (tmp_path / "plan" / "ACQUISITION_PLAN.md").is_file()

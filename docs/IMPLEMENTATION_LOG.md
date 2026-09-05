@@ -1,5 +1,14 @@
 # Implementation log
 
+## Sparse-JEPA empirical corpus gate — 2026-09-05
+
+- Verified that GitHub squash commit `0c9b25ee70611ca7c1c98de070a3f293f27ca3d7` has the same tree as accepted PR #2 head `22963d351d5e0b195249662d9115f0b3f6b0ca0c`.
+- Classified the merged design-freeze hash mismatch as a protocol-preserving implementation defect. Rebound `sparse-jepa-v1` before empirical inspection to the accepted tree, all six YAML files, and all normative documents, and added an enforced checksum sidecar.
+- Enabled only the separately authorized network stage. Historical training and full evaluation remain disabled.
+- Added a pinned, checksummed formation-constituent source, deterministic stable share-class identities, sourced ticker intervals, a pre-request storage/request plan, and a paginated Alpaca SIP entitlement probe.
+- Corrected paper bar acquisition to request the symbol identity as of each interval and normalize retained raw-adjustment bars to the exact `America/New_York` regular-session grid before receipt validation.
+- Recorded the initial merged-baseline result as `FAIL` (131 passed, 3 stale-freeze failures); the focused corrected gate is `PASS`. No historical model fit or test-model result was produced.
+
 ## Sparse predictive-representation paper framework — 2026-09-04
 
 - Accepted ADR 0006 and added a focused paper specification covering the hypothesis, causal boundary, locked folds, artifacts, statistical method, and rejected alternatives.

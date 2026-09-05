@@ -437,6 +437,20 @@ def test_holm_adjustment_is_monotone_in_sorted_pvalues() -> None:
     assert np.all((0 <= adjusted) & (adjusted <= 1))
 
 
+def test_protocol_freeze_is_complete_and_checksum_bound() -> None:
+    config = load_paper_config(Path("configs/paper/sparse_jepa"))
+    freeze = config.design_freeze
+    freeze_path = config.root / "design-freeze-v1.json"
+    sidecar = freeze_path.with_suffix(".sha256").read_text(encoding="utf-8").split()
+
+    assert freeze["protocol_id"] == "sparse-jepa-v1"
+    assert freeze["pr_provenance"]["tree_match"] is True
+    assert freeze["paper_config_sha256"]
+    assert len(freeze["normative_document_sha256"]) >= 7
+    assert freeze["parameter_selection_receipt"] == "NOT RUN"
+    assert sidecar == [file_sha256(freeze_path), freeze_path.name]
+
+
 def test_locked_test_parameter_freeze_requires_the_exact_model_matrix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
