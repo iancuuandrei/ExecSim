@@ -59,6 +59,30 @@ convention are recorded in `docs/RESEARCH_REFERENCES.md`.
 The current terminal state is `AWAITING V2 FORMATION APPROVAL`. The next
 privileged action, target-period acquisition, requires new explicit approval.
 
+## V2 formation validation evidence
+
+| Gate | Result |
+|---|---|
+| Full repository pytest | **PASS** - 158 tests in 474.21 s |
+| V2 focused resolution/formation/report suite | **PASS** - 17 tests |
+| Ruff lint | **PASS** |
+| Ruff format | **PASS** - 180 files |
+| mypy | **PASS** - 125 source files |
+| Repository-context validation | **PASS** - 14 areas, manifest hash `e46e53dedff85f56c0888a42ba73a56d6462790fcbf1a3b8cfb8d42464a40de2` |
+| Dependency-light smoke | **PASS** - 2 tests |
+| V1 immutable artifact audit | **PASS** - five artifact hashes plus terminal manifest |
+| V2 formation freeze artifact audit | **PASS** - eleven evidence hashes and 100 unique members |
+| V2 target corpus path | **NOT CREATED** |
+
+The bounded formation token scan read 45,464,276 minute rows from 1.439 GiB
+of monthly responses in 1,516.73 seconds: 29,975.13 rows/s and 2,167.76
+token attempts/s. Quality output is 2.78 MiB. The scanner's terminal in-process
+RSS field was unavailable due to an incorrect Windows counter binding that was
+subsequently fixed and tested. An operating-system lifetime-peak poll during
+the run observed 267,558,912 bytes (255.16 MiB), which is reported as a lower
+bound rather than an exact terminal peak. The scientific scan was not repeated
+solely to improve telemetry.
+
 ## Inherited v1 software evidence
 
 The redirected work began from PR head

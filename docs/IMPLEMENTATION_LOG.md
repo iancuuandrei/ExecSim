@@ -22,6 +22,7 @@
 - Added v2-only configuration, acquisition, formation-statistics, resolution-quality, diagnostic, and reporting code. Provider-semantics research passed. The authorized daily request returned 126,461 rows for all 505 candidates plus SPY; 497 qualify and the top 100 are frozen.
 - Scanned the retained 45,464,276 formation minute rows with bounded per-instrument/monthly-chunk memory. The scan emitted 127,512 explicit quality identities: 124,215 token-valid sessions versus 41,040 exact full-minute sessions. The selected universe has 99 high-, one medium-, and zero low-token-completeness names under pre-count bands.
 - Confirmed SPY 2021-05-05 remains valid for all 26 representation tokens despite five missing minute aggregates and remains invalid for exact TCA. The all-505 diagnostic shows v1 eligibility materially associated with liquidity and minute activity; no diagnostic changed v2 eligibility.
+- Completed the v2 formation gate with 158 passing tests, Ruff lint and format, mypy over 125 source files, 14-area repository validation, dependency-light smoke, exact v1/v2 artifact audits, and proof that `data/paper/raw_v2` was never created. Terminal status: `AWAITING V2 FORMATION APPROVAL`.
 - Historical model training, locked-test inspection, and historical TCA remain `NOT RUN`. Target acquisition remains prohibited before the v2 formation approval gate.
 
 ## Sparse predictive-representation paper framework — 2026-09-04
