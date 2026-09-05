@@ -5,7 +5,7 @@
   "status": "PROTOCOL_FROZEN",
   "frozen_at_utc": "2026-09-05T15:48:11.1215079Z",
   "git_commit": "0c9b25ee70611ca7c1c98de070a3f293f27ca3d7",
-  "paper_config_sha256": "a495c047658f519acac28095f3ee2d370f9c362059018db002970a77d3baed2a",
+  "paper_config_sha256": "d1c112176b1b0db0179dcacd6d55b3cb9b229d5f202029d96bd364392817c230",
   "source_specification": "docs/PAPER_DESIGN.md",
   "source_specification_sha256": "d86e6b08e114b1e169e1cfac2ec48e953c836c5cb8792248c4242980b3a02209",
   "normative_document_sha256": {

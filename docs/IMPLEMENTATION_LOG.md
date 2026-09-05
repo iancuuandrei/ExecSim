@@ -10,6 +10,8 @@
 - Corrected acquisition semantics discovered on APD: nonempty but incomplete monthly bars are retained with zero validated sessions for explicit exclusion accounting, while genuinely zero-row chunks remain failed receipts and do not count as complete.
 - Corrected empty post-termination provider frames discovered on TIF so they produce schema-valid, explicit zero-row failure receipts instead of failing normalization with a missing timestamp column.
 - Replaced the formation-universe all-corpus concatenation after a measured 6.63 GiB process footprint with a fail-closed, per-instrument monthly scan. The streaming calculation preserves the original price, completeness, and dollar-volume statistics while bounding peak corpus memory.
+- Executed the complete locked formation scan: 59 of 505 candidates met the predeclared 95% exact-session criterion, below the required universe size of 100. Classified this as a Class C data limitation, emitted `CORPUS_QUALITY_REPORT.md`, and stopped before target acquisition, corporate-action processing, fold construction, or historical training.
+- Restored the tracked network authorization default to `false` after the separately authorized acquisition. Rebound only the operational configuration/checksum fields of the tracked freeze; the acquisition-time config hash remains preserved in every acquisition receipt and in the quality report, and no scientific field changed.
 - Recorded the initial merged-baseline result as `FAIL` (131 passed, 3 stale-freeze failures); the focused corrected gate is `PASS`. No historical model fit or test-model result was produced.
 
 ## Sparse predictive-representation paper framework — 2026-09-04
