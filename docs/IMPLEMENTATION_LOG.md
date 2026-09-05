@@ -14,6 +14,14 @@
 - Restored the tracked network authorization default to `false` after the separately authorized acquisition. Rebound only the operational configuration/checksum fields of the tracked freeze; the acquisition-time config hash remains preserved in every acquisition receipt and in the quality report, and no scientific field changed.
 - Recorded the initial merged-baseline result as `FAIL` (131 passed, 3 stale-freeze failures); the focused corrected gate is `PASS`. No historical model fit or test-model result was produced.
 
+## Sparse-JEPA v2 resolution correction — 2026-09-05
+
+- Preserved v1 as a blocked protocol with 62 of 505 eligible names, a 251-session corrected denominator, source-commit-bound normative hashes, and no target acquisition, historical training, test inspection, or TCA.
+- Accepted ADR 0009. V2 measures formation quality from direct SIP daily bars, representation quality from 26 fixed observed-only 15-minute tokens, and TCA quality from the exact 300 consumed minutes from 10:30 through 15:29.
+- Defined token OHLC, sum volume and trade count, volume-weighted VWAP, and observed-close realized variation without inserting, interpolating, or zero-filling absent provider minutes. Early closes remain daily-valid when observed and outside the primary 26-token sample.
+- Added v2-only configuration, acquisition, formation-statistics, and resolution-quality code. Provider-semantics research passed; formation acquisition and counts remain `NOT RUN` until the protocol freeze is finalized.
+- Historical model training, locked-test inspection, and historical TCA remain `NOT RUN`. Target acquisition remains prohibited before the v2 formation approval gate.
+
 ## Sparse predictive-representation paper framework — 2026-09-04
 
 - Accepted ADR 0006 and added a focused paper specification covering the hypothesis, causal boundary, locked folds, artifacts, statistical method, and rejected alternatives.

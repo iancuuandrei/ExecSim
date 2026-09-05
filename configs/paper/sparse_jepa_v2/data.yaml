@@ -1,0 +1,31 @@
+paper_run_id: sparse-jepa-v2
+artifact_root: artifacts/paper/protocols/sparse-jepa-v2
+report_root: reports/paper/sparse_jepa/v2
+allow_network: false
+allow_historical_training: false
+allow_full_paper_run: false
+provider: alpaca
+feed: sip
+formation_frequency: 1Day
+target_frequency: 1min
+frequency: 1min
+adjustment: raw
+timezone: America/New_York
+extended_hours: false
+formation_period: [2021-01-04, 2021-12-31]
+target_period: [2022-01-03, 2025-12-31]
+universe_size: 100
+formation_daily_completeness_minimum: 0.95
+constituent_snapshot: data/paper/formation/constituents.parquet
+ticker_history: data/paper/formation/ticker_history.parquet
+formation_daily_corpus: data/paper/formation_v2/daily-bars.parquet
+formation_daily_receipt: data/paper/formation_v2/daily-bars-receipt.json
+formation_minute_corpus_root: data/paper/formation/bars
+universe_manifest: data/manifests/paper_universe_v2.json
+corporate_action_source: data/paper/corporate_actions_v2/actions.parquet
+corporate_action_manifest: data/paper/corporate_actions_v2/manifest.json
+target_corpus_root: data/paper/raw_v2
+spy_instrument_id: benchmark-spy
+quality_hierarchy: [daily_formation, token_15min_representation, exact_minute_tca_window]
+missing_minute_policy: never_zero_fill_or_interpolate
+tca_required_minutes: {start_inclusive: "10:30", end_exclusive: "15:30", count: 300}

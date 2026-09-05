@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +22,11 @@ CONFIG_FILES = (
     "evaluation.yaml",
     "tca.yaml",
 )
+
+_FREEZE_IDENTITIES = {
+    "sparse-jepa-v1": ("design-freeze-v1.json", "paper-design-freeze-v2", 1),
+    "sparse-jepa-v2": ("design-freeze-v2.json", "paper-design-freeze-v3", 2),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,11 +114,14 @@ def load_paper_config(path: Path) -> PaperRunConfig:
         if not isinstance(payload, dict):
             raise TypeError(f"Paper YAML must contain a mapping: {file_path}")
         sections[file_path.stem] = payload
-    freeze_path = root / "design-freeze-v1.json"
+    paper_run_id = str(sections.get("data", {}).get("paper_run_id", ""))
+    try:
+        freeze_name, _, _ = _FREEZE_IDENTITIES[paper_run_id]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported paper protocol identity: {paper_run_id!r}") from exc
+    freeze_path = root / freeze_name
     if not freeze_path.is_file():
         raise FileNotFoundError(f"Paper design freeze is missing: {freeze_path}")
-    import json
-
     freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
     if not isinstance(freeze, dict):
         raise TypeError("Paper design freeze must contain a JSON object.")
@@ -128,10 +139,15 @@ def _validate_design_freeze(
     freeze: dict[str, Any],
 ) -> None:
     """Verify the one-time protocol receipt, its sidecar, and every frozen source."""
+    protocol_id = str(sections["data"].get("paper_run_id", ""))
+    try:
+        _, expected_schema, expected_version = _FREEZE_IDENTITIES[protocol_id]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported paper protocol identity: {protocol_id!r}") from exc
     if (
-        freeze.get("schema_version") != "paper-design-freeze-v2"
-        or freeze.get("protocol_id") != "sparse-jepa-v1"
-        or freeze.get("protocol_version") != 1
+        freeze.get("schema_version") != expected_schema
+        or freeze.get("protocol_id") != protocol_id
+        or freeze.get("protocol_version") != expected_version
         or freeze.get("status") != "PROTOCOL_FROZEN"
     ):
         raise ValueError("Paper design freeze identity is invalid.")
@@ -149,14 +165,16 @@ def _validate_design_freeze(
     documents = freeze.get("normative_document_sha256")
     if not isinstance(documents, dict) or not documents:
         raise ValueError("Paper design freeze must bind its normative documents.")
-    mismatches = [
-        relative
+    mismatches: list[str] = [
+        str(relative)
         for relative, expected in documents.items()
         if not isinstance(relative, str)
         or not isinstance(expected, str)
         or file_sha256(repository_root / relative) != expected
     ]
-    if mismatches:
+    if mismatches and protocol_id == "sparse-jepa-v1":
+        _validate_archived_v1_sources(repository_root, freeze_path, freeze, mismatches)
+    elif mismatches:
         raise ValueError(f"Paper design freeze normative document mismatch: {sorted(mismatches)}")
     specification = str(freeze.get("source_specification", ""))
     if (
@@ -166,6 +184,57 @@ def _validate_design_freeze(
         raise ValueError("Paper design freeze does not match its normative specification.")
 
 
+def _validate_archived_v1_sources(
+    repository_root: Path,
+    freeze_path: Path,
+    freeze: dict[str, Any],
+    mismatches: list[str],
+) -> None:
+    """Verify evolved v1 documents against their immutable Git source snapshot."""
+    evidence_path = freeze_path.with_name("v1-evidence-final.json")
+    evidence_sidecar = evidence_path.with_suffix(".sha256")
+    if not evidence_path.is_file() or not evidence_sidecar.is_file():
+        raise ValueError(f"Archived v1 normative document mismatch: {sorted(mismatches)}")
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    fields = evidence_sidecar.read_text(encoding="utf-8").strip().split()
+    content = dict(evidence)
+    claimed_bundle_hash = content.pop("bundle_content_sha256", None)
+    if (
+        not isinstance(evidence, dict)
+        or fields != [file_sha256(evidence_path), evidence_path.name]
+        or evidence.get("schema_version") != "paper-v1-terminal-evidence-v1"
+        or evidence.get("protocol_id") != "sparse-jepa-v1"
+        or evidence.get("artifacts", {}).get("design_freeze") != file_sha256(freeze_path)
+        or claimed_bundle_hash != stable_hash(content)
+    ):
+        raise ValueError("Archived v1 terminal evidence is invalid.")
+    commit = evidence.get("normative_source_commit")
+    if not isinstance(commit, str) or len(commit) != 40:
+        raise ValueError("Archived v1 terminal evidence lacks its normative source commit.")
+    documents = freeze["normative_document_sha256"]
+    failed: list[str] = []
+    for relative in mismatches:
+        if relative.startswith(("/", "\\")) or ".." in Path(relative).parts:
+            failed.append(relative)
+            continue
+        result = subprocess.run(
+            ["git", "show", f"{commit}:{relative}"],
+            cwd=repository_root,
+            check=False,
+            capture_output=True,
+        )
+        raw = result.stdout
+        crlf = raw.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+        expected = documents[relative]
+        if result.returncode != 0 or expected not in {
+            hashlib.sha256(raw).hexdigest(),
+            hashlib.sha256(crlf).hexdigest(),
+        }:
+            failed.append(relative)
+    if failed:
+        raise ValueError(f"Archived v1 normative source mismatch: {sorted(failed)}")
+
+
 def _validate_sections(sections: dict[str, dict[str, Any]]) -> None:
     data = sections["data"]
     sequence = sections["sequences"]
@@ -173,6 +242,7 @@ def _validate_sections(sections: dict[str, dict[str, Any]]) -> None:
     lightgbm = sections["lightgbm"]
     evaluation = sections["evaluation"]
     tca = sections["tca"]
+    protocol_id = str(data.get("paper_run_id", ""))
     expected = {
         "provider": "alpaca",
         "feed": "sip",
@@ -271,3 +341,29 @@ def _validate_sections(sections: dict[str, dict[str, Any]]) -> None:
         raise ValueError("TCA configuration contradicts the locked experiment.")
     if data.get("allow_full_paper_run") and not data.get("allow_historical_training"):
         raise ValueError("Full paper evaluation requires historical-training authorization.")
+    if protocol_id == "sparse-jepa-v2":
+        _validate_v2_quality_sections(data, sequence)
+
+
+def _validate_v2_quality_sections(data: dict[str, Any], sequence: dict[str, Any]) -> None:
+    """Reject any silent relaxation of the v2 daily/token/minute hierarchy."""
+    if (
+        data.get("formation_frequency") != "1Day"
+        or data.get("target_frequency") != "1min"
+        or data.get("formation_daily_completeness_minimum") != 0.95
+        or data.get("quality_hierarchy")
+        != ["daily_formation", "token_15min_representation", "exact_minute_tca_window"]
+        or data.get("missing_minute_policy") != "never_zero_fill_or_interpolate"
+        or data.get("tca_required_minutes")
+        != {"start_inclusive": "10:30", "end_exclusive": "15:30", "count": 300}
+    ):
+        raise ValueError("V2 data configuration contradicts the resolution-quality protocol.")
+    if (
+        sequence.get("quality_protocol") != "resolution-aware-v2"
+        or sequence.get("minimum_observed_bars_per_token") != 2
+        or sequence.get("token_aggregation") != "observed_provider_bars_only"
+        or sequence.get("realized_volatility") != "observed_close_log_return_sum_of_squares"
+        or sequence.get("missing_minute_policy") != "never_zero_fill_or_interpolate"
+        or sequence.get("primary_session_rule") != "all_26_tokens_valid_and_standard_xnys_session"
+    ):
+        raise ValueError("V2 sequence configuration contradicts the token-quality protocol.")

@@ -1,0 +1,29 @@
+folds:
+  - id: fold-1
+    train: [2022-01-03, 2023-12-29]
+    validation: [2024-01-02, 2024-03-28]
+    test: [2024-04-01, 2024-06-28]
+  - id: fold-2
+    train: [2022-01-03, 2024-06-28]
+    validation: [2024-07-01, 2024-09-30]
+    test: [2024-10-01, 2024-12-31]
+  - id: fold-3
+    train: [2022-01-03, 2024-12-31]
+    validation: [2025-01-02, 2025-06-30]
+    test: [2025-07-01, 2025-12-31]
+primary_metrics: [log_remaining_volume_mae, conditional_curve_wasserstein]
+representation_origins: ["10:30", "14:00"]
+representation_metrics: [train_covariance_normalized_nmse]
+execution_primary_metrics: [normalized_allocation_regret, absolute_impact_cost]
+bootstrap_block_dates: 5
+bootstrap_block_sensitivity_dates: [1, 10]
+bootstrap_repetitions: 10000
+confidence: 0.95
+multiple_testing: holm
+confirmatory_contrasts: 5
+confirmatory_contrast_definitions:
+  - {stage: representation, candidate: sparse, baseline: dense, endpoint: affine_normalized_latent_error}
+  - {stage: forecasting, candidate: sparse, baseline: dense, endpoint: log_remaining_volume_mae}
+  - {stage: forecasting, candidate: sparse, baseline: dense, endpoint: conditional_curve_error}
+  - {stage: forecasting, candidate: sparse, baseline: raw, endpoint: log_remaining_volume_mae}
+  - {stage: forecasting, candidate: sparse, baseline: raw, endpoint: conditional_curve_error}

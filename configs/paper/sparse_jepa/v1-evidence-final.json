@@ -1,0 +1,20 @@
+{
+  "schema_version": "paper-v1-terminal-evidence-v1",
+  "protocol_id": "sparse-jepa-v1",
+  "status": "BLOCKED — INSUFFICIENT FORMATION UNIVERSE UNDER LOCKED EXACT-MINUTE CRITERION",
+  "eligible_instruments": 62,
+  "expected_primary_sessions": 251,
+  "class_a_correction": "Early closes excluded from exact 390-minute denominator.",
+  "normative_source_commit": "b19d09209371e845d9e8596cfe460762fe025856",
+  "target_acquisition": "NOT RUN",
+  "historical_training": "NOT RUN",
+  "locked_test_inspection": "NOT RUN",
+  "artifacts": {
+    "design_freeze": "08a6fbf23bebbfc1fe4cc4ab13909c584fbbdd5b926c1b8601cd689a7573bc98",
+    "formation_candidates": "efdf33664dd5b0db377ce324945bb5238fa8f5fa6d9bb59e9ee9c0299c5a0cbc",
+    "formation_exclusions": "ec580c1f3223aa3bb5dac0ef65aba6a3f8c3748f89849fc0cf8affa58d575d42",
+    "quality_report": "8265690948ffa3164ea5478dde06e91fdbfe1f62d436d7094f62cdff080b9361",
+    "quality_receipt": "5f11a1b027010d5b62110c1e5a950f0a50502fb6e569a5d5edbc3369eacce0d5"
+  },
+  "bundle_content_sha256": "2340262633113b1a246f24c97daa6b89c85ba7b207903b98d897ac90d1dfe47c"
+}

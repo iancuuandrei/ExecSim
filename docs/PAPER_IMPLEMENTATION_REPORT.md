@@ -1,19 +1,66 @@
 # Sparse-JEPA paper implementation report
 
-This report records the software state of PR #2 after the research-program
-redirect on 2026-09-05. It distinguishes executable software evidence from
-licensed-data, historical-training, and empirical evidence. It makes no claim
-about representation quality, forecast accuracy, execution cost, or economic
-value.
+This report records the active `sparse-jepa-v2` corpus-protocol correction and
+the inherited v1 paper software. It distinguishes executable software evidence
+from formation data, target data, historical training, and empirical evidence.
+It makes no claim about representation quality, forecast accuracy, execution
+cost, or economic value.
 
 ## Status
 
 | Evidence class | Status |
 |---|---|
-| Redirected historical experiment software | **SOFTWARE READY** |
-| Real Alpaca SIP corpus | **DATA NOT ACQUIRED** |
+| Sparse-JEPA v1 formation protocol | **BLOCKED** - 62 of 505 eligible |
+| Sparse-JEPA v2 protocol and formation software | **IMPLEMENTATION IN PROGRESS** |
+| V2 formation daily corpus and frozen universe | **NOT RUN** |
+| V2 target-period Alpaca SIP corpus | **DATA NOT ACQUIRED** |
 | Historical JEPA and LightGBM fits | **TRAINING NOT RUN** |
 | Locked-test representation, forecast, execution, and paper estimates | **EMPIRICAL RESULT NOT AVAILABLE** |
+
+V1 remains frozen under its original exact-minute formation contract. Its
+terminal evidence manifest is `configs/paper/sparse_jepa/v1-evidence-final.json`;
+the status is `BLOCKED — INSUFFICIENT FORMATION UNIVERSE UNDER LOCKED
+EXACT-MINUTE CRITERION`, the corrected standard-session denominator is 251,
+and all target acquisition, training, locked-test inspection, and TCA stages
+are `NOT RUN`.
+
+V2 changes only data-quality resolution: provider-native daily formation,
+observed-only fixed 15-minute representation tokens, and exact 300-minute TCA
+windows. The unchanged 95% concept now measures valid expected daily sessions.
+No absent provider minute is interpreted as zero activity. The formation result,
+SPY 2021-05-05 token audit, v1/v2 bias diagnostic, resource evidence, and final
+v2 terminal status will be recorded after the authorized bounded formation run.
+
+## Provider semantics gate
+
+**PASS.** Current Alpaca documentation supports the v2 interpretation. Stock
+minute and daily bars are separately aggregated from trades using tape-,
+condition-, and bar-type-specific field rules. A stock bar is emitted only when
+all OHLCV fields are nonzero. Consequently, an absent minute aggregate is not
+evidence that the minute had zero market activity or zero volume. Alpaca's
+higher-interval rule aggregates observed source bars using first open, extrema,
+last close, summed volume and trade count, and volume-weighted VWAP. Direct SIP
+`1Day` retrieval is available. Source links and the observed-grid volatility
+convention are recorded in `docs/RESEARCH_REFERENCES.md`.
+
+## V2 evidence boundary
+
+| Stage | Status |
+|---|---|
+| Official provider-semantics review | **PASS** |
+| V2 protocol documents and ADR 0009 | **IMPLEMENTED; FINAL FREEZE PENDING** |
+| Daily formation acquisition | **NOT RUN** |
+| Formation candidate rebuild and top-100 freeze | **NOT RUN** |
+| Formation token-quality and v1/v2 bias diagnostics | **NOT RUN** |
+| Target acquisition | **NOT RUN** - prohibited before formation approval |
+| Historical model training | **NOT RUN** |
+| Locked test and historical TCA | **NOT RUN** |
+
+The next permitted terminal state after a successful >=100-name formation is
+`AWAITING V2 FORMATION APPROVAL`. Fewer than 100 names produces `BLOCKED —
+INSUFFICIENT DAILY-QUALITY FORMATION UNIVERSE`.
+
+## Inherited v1 software evidence
 
 The redirected work began from PR head
 `74bca4403cd351579221a86736d77210821adde3`. Its baseline was 118 passing
@@ -220,6 +267,8 @@ manifests exist.
 - Locked-test accessibility, forecast, regime, execution, bootstrap, and final
   paper estimates: **EMPIRICAL RESULT NOT AVAILABLE**.
 
-No synthetic result is an empirical paper result. PR #2 is locally merge-ready;
-final merge readiness additionally requires GitHub CI to pass on the exact
-pushed head.
+No synthetic result is an empirical paper result. The inherited v1 software
+evidence does not establish v2 formation readiness. V2 is not complete until
+its daily candidate rebuild, frozen-universe decision, resolution diagnostics,
+resource measurements, checksummed report bundle, and current repository gates
+have executed.
