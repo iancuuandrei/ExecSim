@@ -147,7 +147,19 @@ class PaperRunConfig:
 
 def load_runtime_approval(path: Path, config: PaperRunConfig) -> PaperRuntimeApproval:
     """Load a strict runtime approval bound to the current protocol/config identity."""
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    approval_root = config.root.resolve().parents[2] / ".runtime" / "paper-approvals"
+    try:
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(approval_root.resolve())
+    except (FileNotFoundError, ValueError) as exc:
+        raise PermissionError(
+            f"Paper runtime approval must be an existing file below {approval_root}."
+        ) from exc
+    if resolved.suffix.lower() != ".json" or not resolved.is_file():
+        raise PermissionError("Paper runtime approval must be a regular JSON file.")
+    if resolved.stat().st_size > 65_536:
+        raise ValueError("Paper runtime approval exceeds the 64 KiB size limit.")
+    payload = json.loads(resolved.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise TypeError("Paper runtime approval must contain a JSON object.")
     approvals = payload.get("approvals")

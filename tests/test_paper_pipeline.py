@@ -729,11 +729,17 @@ def _runtime_approval_payload(config, **approved: bool) -> dict[str, object]:
     }
 
 
+def _runtime_approval_path(tmp_path: Path, name: str) -> Path:
+    root = Path(".runtime/paper-approvals") / tmp_path.name
+    root.mkdir(parents=True, exist_ok=True)
+    return root / name
+
+
 def test_v2_runtime_authorization_is_external_identity_bound_and_scoped(
     tmp_path: Path,
 ) -> None:
     config = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
-    approval_path = tmp_path / "network-approval.json"
+    approval_path = _runtime_approval_path(tmp_path, "network-approval.json")
     write_json_atomic(
         approval_path,
         _runtime_approval_payload(config, target_acquisition=True),
@@ -750,7 +756,7 @@ def test_v2_runtime_authorization_is_external_identity_bound_and_scoped(
     with pytest.raises(PermissionError, match="matching runtime approval"):
         config.authorize("historical_training", approval=approval, cli_enabled=True)
 
-    training_path = tmp_path / "training-approval.json"
+    training_path = _runtime_approval_path(tmp_path, "training-approval.json")
     write_json_atomic(
         training_path,
         _runtime_approval_payload(config, historical_training=True),
@@ -767,7 +773,7 @@ def test_cli_requires_both_runtime_approval_and_matching_flag(
 
     config_path = Path("configs/paper/sparse_jepa_v2/data.yaml")
     config = load_paper_config(config_path)
-    approval_path = tmp_path / "network-approval.json"
+    approval_path = _runtime_approval_path(tmp_path, "cli-network-approval.json")
     write_json_atomic(
         approval_path,
         _runtime_approval_payload(config, target_acquisition=True),
@@ -811,7 +817,7 @@ def test_runtime_approval_for_another_identity_is_denied(
     tmp_path: Path, field: str, value: str
 ) -> None:
     config = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
-    approval_path = tmp_path / "wrong-identity.json"
+    approval_path = _runtime_approval_path(tmp_path, f"wrong-{field}.json")
     payload = _runtime_approval_payload(config, target_acquisition=True)
     payload[field] = value
     write_json_atomic(approval_path, payload)

@@ -4,7 +4,7 @@ This operational specification controls privileged sparse-JEPA paper stages with
 
 ## Approval receipt
 
-A runtime approval is an untracked JSON file supplied with `--runtime-approval`. It has this exact schema:
+A runtime approval is an untracked JSON file below the repository-local `.runtime/paper-approvals/` directory and supplied with `--runtime-approval`. Canonical path validation rejects files outside that root, non-JSON files, non-regular files, and files larger than 64 KiB. The directory is ignored by Git. An approval has this exact schema:
 
 ```json
 {
