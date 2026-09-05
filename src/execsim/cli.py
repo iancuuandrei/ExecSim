@@ -111,6 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--enable-network", action="store_true")
         command.add_argument("--enable-historical-training", action="store_true")
         command.add_argument("--enable-full-paper-run", action="store_true")
+        command.add_argument("--runtime-approval", type=Path, default=None)
         command.add_argument("--trust-local-resume", action="store_true")
         command.add_argument("--synthetic-fixture", action="store_true")
         command.add_argument("--input", type=Path, default=None)
@@ -370,12 +371,17 @@ def _ml(args: argparse.Namespace) -> int:
 
 def _paper(args: argparse.Namespace) -> int:
     from execsim.ml.paper.benchmark import build_compute_plan
-    from execsim.ml.paper.configs import load_paper_config
+    from execsim.ml.paper.configs import load_paper_config, load_runtime_approval
 
     config = load_paper_config(args.config)
+    runtime_approval = (
+        load_runtime_approval(args.runtime_approval, config)
+        if args.runtime_approval is not None
+        else None
+    )
     operation = None
     if args.paper_command == "download-data":
-        operation = ("network", args.enable_network)
+        operation = ("target_acquisition", args.enable_network)
     elif args.paper_command in {"train-representation", "train-volume-model"}:
         if not args.synthetic_fixture:
             operation = ("historical_training", args.enable_historical_training)
@@ -386,23 +392,33 @@ def _paper(args: argparse.Namespace) -> int:
         "report",
     }:
         if not args.dry_run and not args.synthetic_fixture:
-            operation = ("full_paper_run", args.enable_full_paper_run)
+            operation = ("locked_result_evaluation", args.enable_full_paper_run)
     if operation is not None:
-        config.authorize(operation[0], cli_enabled=operation[1])
+        config.authorize(operation[0], approval=runtime_approval, cli_enabled=operation[1])
     if not args.dry_run:
-        result = _execute_paper_command(args, config)
+        result = _execute_paper_command(args, config, runtime_approval)
         if result is not None:
             print(json.dumps(result, indent=2, default=str))
             return 1 if result.get("valid") is False else 0
     plan = build_compute_plan(
-        network_enabled=(config.allow_network and args.enable_network and not args.dry_run),
+        network_enabled=config.authorization_granted(
+            "target_acquisition",
+            approval=runtime_approval,
+            cli_enabled=args.enable_network and not args.dry_run,
+        ),
         historical_training_enabled=(
-            config.allow_historical_training
-            and args.enable_historical_training
-            and not args.dry_run
+            config.authorization_granted(
+                "historical_training",
+                approval=runtime_approval,
+                cli_enabled=args.enable_historical_training and not args.dry_run,
+            )
         ),
         full_run_enabled=(
-            config.allow_full_paper_run and args.enable_full_paper_run and not args.dry_run
+            config.authorization_granted(
+                "locked_result_evaluation",
+                approval=runtime_approval,
+                cli_enabled=args.enable_full_paper_run and not args.dry_run,
+            )
         ),
     )
     payload = {
@@ -426,7 +442,9 @@ def _paper(args: argparse.Namespace) -> int:
     return 0
 
 
-def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, object] | None:
+def _execute_paper_command(
+    args: argparse.Namespace, config: Any, runtime_approval: Any
+) -> dict[str, object] | None:
     """Execute bounded paper operations after the command-level safety checks."""
     if args.paper_command == "run":
         from execsim.ml.paper.orchestration import run_authorized_stages
@@ -436,12 +454,17 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
             network_cli_enabled=args.enable_network,
             training_cli_enabled=args.enable_historical_training,
             full_run_cli_enabled=args.enable_full_paper_run,
+            runtime_approval=runtime_approval,
             trusted_local_resume=args.trust_local_resume,
         )
     if args.paper_command == "download-data":
         from execsim.ml.paper.orchestration import download_data_stage
 
-        return download_data_stage(config, cli_enabled=args.enable_network)
+        return download_data_stage(
+            config,
+            cli_enabled=args.enable_network,
+            runtime_approval=runtime_approval,
+        )
     if args.paper_command == "build-universe":
         from execsim.ml.paper.orchestration import build_universe_stage
 
@@ -474,7 +497,8 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
 
         return train_representations_stage(
             config,
-            allow_historical_training=args.enable_historical_training,
+            training_cli_enabled=args.enable_historical_training,
+            runtime_approval=runtime_approval,
             trusted_local_resume=args.trust_local_resume,
         )
     if args.paper_command == "train-volume-model" and args.synthetic_fixture:
@@ -500,7 +524,9 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
         from execsim.ml.paper.orchestration import train_volume_models_stage
 
         return train_volume_models_stage(
-            config, allow_historical_training=args.enable_historical_training
+            config,
+            training_cli_enabled=args.enable_historical_training,
+            runtime_approval=runtime_approval,
         )
     if args.paper_command == "export-embeddings" and args.synthetic_fixture:
         import hashlib
@@ -589,7 +615,11 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
     if args.paper_command == "evaluate-representation":
         from execsim.ml.paper.orchestration import evaluate_representations_stage
 
-        return evaluate_representations_stage(config)
+        return evaluate_representations_stage(
+            config,
+            full_run_cli_enabled=args.enable_full_paper_run,
+            runtime_approval=runtime_approval,
+        )
     if args.paper_command == "evaluate-forecast" and args.synthetic_fixture:
         import numpy as np
 
@@ -608,7 +638,11 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
     if args.paper_command == "evaluate-forecast":
         from execsim.ml.paper.orchestration import evaluate_forecasts_stage
 
-        return evaluate_forecasts_stage(config)
+        return evaluate_forecasts_stage(
+            config,
+            full_run_cli_enabled=args.enable_full_paper_run,
+            runtime_approval=runtime_approval,
+        )
     if args.paper_command == "run-tca" and args.synthetic_fixture:
         from datetime import date, time
 
@@ -677,7 +711,12 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
     if args.paper_command == "run-tca":
         from execsim.ml.paper.orchestration import run_tca_stage
 
-        return run_tca_stage(config, args.input)
+        return run_tca_stage(
+            config,
+            args.input,
+            full_run_cli_enabled=args.enable_full_paper_run,
+            runtime_approval=runtime_approval,
+        )
     if args.paper_command == "report" and args.synthetic_fixture:
         import pandas as pd
 
@@ -698,7 +737,11 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
     if args.paper_command == "report":
         from execsim.ml.paper.orchestration import report_stage
 
-        return report_stage(config)
+        return report_stage(
+            config,
+            full_run_cli_enabled=args.enable_full_paper_run,
+            runtime_approval=runtime_approval,
+        )
     if args.paper_command in {"plan", "plan-representation"}:
         from execsim.ml.paper.benchmark import (
             build_compute_plan,
@@ -709,9 +752,21 @@ def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, o
         planning_payload: dict[str, object] = {
             "plan": asdict(
                 build_compute_plan(
-                    network_enabled=config.allow_network,
-                    historical_training_enabled=config.allow_historical_training,
-                    full_run_enabled=config.allow_full_paper_run,
+                    network_enabled=config.authorization_granted(
+                        "target_acquisition",
+                        approval=runtime_approval,
+                        cli_enabled=args.enable_network,
+                    ),
+                    historical_training_enabled=config.authorization_granted(
+                        "historical_training",
+                        approval=runtime_approval,
+                        cli_enabled=args.enable_historical_training,
+                    ),
+                    full_run_enabled=config.authorization_granted(
+                        "locked_result_evaluation",
+                        approval=runtime_approval,
+                        cli_enabled=args.enable_full_paper_run,
+                    ),
                 )
             ),
             "measured_profile": asdict(profile_paper_kernels(args.input)),

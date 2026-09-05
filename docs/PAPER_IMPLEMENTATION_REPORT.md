@@ -1,5 +1,7 @@
 # Sparse-JEPA paper implementation report
 
+Privileged stage execution follows the separate [paper runtime authorization specification](PAPER_RUNTIME_AUTHORIZATION.md). Runtime approval is external to the six scientifically frozen YAML files and requires a matching command-line opt-in; this operational mechanism does not alter the sparse-jepa-v2 protocol hash.
+
 This report records the active `sparse-jepa-v2` corpus-protocol correction and
 the inherited v1 paper software. It distinguishes executable software evidence
 from formation data, target data, historical training, and empirical evidence.

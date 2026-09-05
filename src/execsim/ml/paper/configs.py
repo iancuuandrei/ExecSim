@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,10 +24,34 @@ CONFIG_FILES = (
     "tca.yaml",
 )
 
+RUNTIME_APPROVAL_SCHEMA = "paper-runtime-approval-v1"
+RUNTIME_APPROVAL_OPERATIONS = (
+    "target_acquisition",
+    "historical_training",
+    "locked_result_evaluation",
+)
+
 _FREEZE_IDENTITIES = {
     "sparse-jepa-v1": ("design-freeze-v1.json", "paper-design-freeze-v1", 1),
     "sparse-jepa-v2": ("design-freeze-v2.json", "paper-design-freeze-v3", 2),
 }
+
+
+@dataclass(frozen=True, slots=True)
+class PaperRuntimeApproval:
+    """Represent a runtime-only approval outside the scientific configuration."""
+
+    approval_id: str
+    approved_at_utc: str
+    protocol_id: str
+    paper_config_sha256: str
+    approved_operations: frozenset[str]
+
+    def approves(self, operation: str) -> bool:
+        """Return whether this receipt explicitly approves one known operation."""
+        if operation not in RUNTIME_APPROVAL_OPERATIONS:
+            raise ValueError(f"Unknown paper operation: {operation}")
+        return operation in self.approved_operations
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,20 +111,88 @@ class PaperRunConfig:
     def report_root(self) -> Path:
         return Path(self.data["report_root"])
 
-    def authorize(self, operation: str, *, cli_enabled: bool) -> None:
-        """Require config and CLI opt-in for each privileged operation."""
-        mapping = {
-            "network": self.allow_network,
-            "historical_training": self.allow_historical_training,
-            "full_paper_run": self.allow_full_paper_run,
-        }
-        if operation not in mapping:
+    def authorization_granted(
+        self,
+        operation: str,
+        *,
+        approval: PaperRuntimeApproval | None,
+        cli_enabled: bool,
+    ) -> bool:
+        """Return true only for an identity-bound approval plus explicit CLI opt-in."""
+        if operation not in RUNTIME_APPROVAL_OPERATIONS:
             raise ValueError(f"Unknown paper operation: {operation}")
-        if not mapping[operation] or not cli_enabled:
+        if approval is None:
+            return False
+        if (
+            approval.protocol_id != self.paper_run_id
+            or approval.paper_config_sha256 != self.config_hash
+        ):
+            return False
+        return approval.approves(operation) and cli_enabled
+
+    def authorize(
+        self,
+        operation: str,
+        *,
+        approval: PaperRuntimeApproval | None,
+        cli_enabled: bool,
+    ) -> None:
+        """Require an identity-bound runtime approval and matching CLI opt-in."""
+        if not self.authorization_granted(operation, approval=approval, cli_enabled=cli_enabled):
             raise PermissionError(
-                f"Paper operation {operation!r} requires explicit config and "
-                "command-line authorization."
+                f"Paper operation {operation!r} requires a matching runtime approval "
+                "and explicit command-line opt-in."
             )
+
+
+def load_runtime_approval(path: Path, config: PaperRunConfig) -> PaperRuntimeApproval:
+    """Load a strict runtime approval bound to the current protocol/config identity."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise TypeError("Paper runtime approval must contain a JSON object.")
+    approvals = payload.get("approvals")
+    expected_operations = set(RUNTIME_APPROVAL_OPERATIONS)
+    expected_fields = {
+        "schema_version",
+        "approval_id",
+        "approved_at_utc",
+        "protocol_id",
+        "paper_config_sha256",
+        "approvals",
+    }
+    if (
+        set(payload) != expected_fields
+        or payload.get("schema_version") != RUNTIME_APPROVAL_SCHEMA
+        or not isinstance(payload.get("approval_id"), str)
+        or not payload["approval_id"].strip()
+        or not isinstance(payload.get("approved_at_utc"), str)
+        or not payload["approved_at_utc"].strip()
+        or not isinstance(approvals, dict)
+        or set(approvals) != expected_operations
+        or any(not isinstance(approvals[name], bool) for name in expected_operations)
+    ):
+        raise ValueError("Paper runtime approval schema is invalid.")
+    try:
+        approved_at = datetime.fromisoformat(payload["approved_at_utc"].replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("Paper runtime approval timestamp is invalid.") from exc
+    if approved_at.tzinfo is None:
+        raise ValueError("Paper runtime approval timestamp must include a timezone.")
+    approval = PaperRuntimeApproval(
+        approval_id=payload["approval_id"],
+        approved_at_utc=payload["approved_at_utc"],
+        protocol_id=str(payload.get("protocol_id", "")),
+        paper_config_sha256=str(payload.get("paper_config_sha256", "")),
+        approved_operations=frozenset(
+            name for name in RUNTIME_APPROVAL_OPERATIONS if approvals[name]
+        ),
+    )
+    if (
+        approval.protocol_id != config.paper_run_id
+        or approval.paper_config_sha256 != config.config_hash
+    ):
+        raise PermissionError("Paper runtime approval does not match this protocol/config.")
+    return approval
 
 
 def load_paper_config(path: Path) -> PaperRunConfig:

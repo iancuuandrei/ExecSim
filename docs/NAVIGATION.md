@@ -11,6 +11,7 @@ ExecSim uses a small manifest-backed navigation system rather than Nx. The repos
 - Point-in-time rules: `docs/DATA_LEAKAGE_CONTRACT.md`
 - ML design and future training procedure: `docs/ML_DESIGN.md`
 - Sparse-JEPA paper contracts and locked experiment: `docs/PAPER_DESIGN.md`
+- Operational paper-stage authorization: `docs/PAPER_RUNTIME_AUTHORIZATION.md`
 - Sparse-JEPA implementation evidence and gate classification: `docs/PAPER_IMPLEMENTATION_REPORT.md`
 - Sparse-JEPA v2 formation evidence and approval gate: `V2_FORMATION_QUALITY_REPORT.md`
 - Provider and research-method sources: `docs/RESEARCH_REFERENCES.md`

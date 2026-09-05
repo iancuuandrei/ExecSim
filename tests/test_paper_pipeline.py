@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from dataclasses import replace
@@ -11,18 +12,23 @@ import pandas as pd
 import pytest
 import yaml
 
+from execsim.cli import main
 from execsim.data.paper.manifests import file_sha256, write_json_atomic
 from execsim.ml.models.lightgbm_adapter import LightGBMConfig, LightGBMVolumeModel
 from execsim.ml.models.random_projection import projection_hash, random_projection_matrix
 from execsim.ml.paper.benchmark import estimate_manifest_resources, predictor_capacity_smoke
-from execsim.ml.paper.configs import load_paper_config
+from execsim.ml.paper.configs import load_paper_config, load_runtime_approval
 from execsim.ml.paper.features import (
     append_embedding,
     build_raw_feature_frame,
     build_untrained_neural_control,
 )
 from execsim.ml.paper.forecast_provider import PaperLightGBMForecastProvider
-from execsim.ml.paper.orchestration import _require_parameter_freeze
+from execsim.ml.paper.orchestration import (
+    _formation_artifacts_ready,
+    _require_parameter_freeze,
+    run_authorized_stages,
+)
 from execsim.ml.paper.provenance import build_run_provenance
 from execsim.ml.paper.regimes import (
     fit_regime_thresholds,
@@ -704,3 +710,166 @@ def test_tracked_paper_configs_keep_privileged_operations_disabled() -> None:
     assert data["allow_full_paper_run"] is False
     assert sequences["horizons"] == [1, 2, 4, 8]
     assert representation["seeds"] == [13, 29, 47]
+
+
+def _runtime_approval_payload(config, **approved: bool) -> dict[str, object]:
+    scopes = {
+        "target_acquisition": False,
+        "historical_training": False,
+        "locked_result_evaluation": False,
+    }
+    scopes.update(approved)
+    return {
+        "schema_version": "paper-runtime-approval-v1",
+        "approval_id": "test-explicit-approval",
+        "approved_at_utc": "2026-09-06T00:00:00Z",
+        "protocol_id": config.paper_run_id,
+        "paper_config_sha256": config.config_hash,
+        "approvals": scopes,
+    }
+
+
+def test_v2_runtime_authorization_is_external_identity_bound_and_scoped(
+    tmp_path: Path,
+) -> None:
+    config = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
+    approval_path = tmp_path / "network-approval.json"
+    write_json_atomic(
+        approval_path,
+        _runtime_approval_payload(config, target_acquisition=True),
+    )
+    approval = load_runtime_approval(approval_path, config)
+
+    with pytest.raises(PermissionError, match="matching runtime approval"):
+        config.authorize("target_acquisition", approval=None, cli_enabled=False)
+    with pytest.raises(PermissionError, match="matching runtime approval"):
+        config.authorize("target_acquisition", approval=None, cli_enabled=True)
+    with pytest.raises(PermissionError, match="matching runtime approval"):
+        config.authorize("target_acquisition", approval=approval, cli_enabled=False)
+    config.authorize("target_acquisition", approval=approval, cli_enabled=True)
+    with pytest.raises(PermissionError, match="matching runtime approval"):
+        config.authorize("historical_training", approval=approval, cli_enabled=True)
+
+    training_path = tmp_path / "training-approval.json"
+    write_json_atomic(
+        training_path,
+        _runtime_approval_payload(config, historical_training=True),
+    )
+    training = load_runtime_approval(training_path, config)
+    with pytest.raises(PermissionError, match="matching runtime approval"):
+        config.authorize("locked_result_evaluation", approval=training, cli_enabled=True)
+
+
+def test_cli_requires_both_runtime_approval_and_matching_flag(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    import execsim.ml.paper.orchestration as orchestration
+
+    config_path = Path("configs/paper/sparse_jepa_v2/data.yaml")
+    config = load_paper_config(config_path)
+    approval_path = tmp_path / "network-approval.json"
+    write_json_atomic(
+        approval_path,
+        _runtime_approval_payload(config, target_acquisition=True),
+    )
+    base = ["ml", "paper", "download-data", "--config", str(config_path)]
+
+    with pytest.raises(SystemExit) as flag_only:
+        main([*base, "--enable-network"])
+    assert flag_only.value.code == 2
+    with pytest.raises(SystemExit) as approval_only:
+        main([*base, "--runtime-approval", str(approval_path)])
+    assert approval_only.value.code == 2
+
+    calls: list[tuple[bool, str]] = []
+
+    def authorized_stub(config, *, cli_enabled, runtime_approval):
+        calls.append((cli_enabled, runtime_approval.approval_id))
+        return {"status": "authorization boundary reached; network not called"}
+
+    monkeypatch.setattr(orchestration, "download_data_stage", authorized_stub)
+    assert (
+        main(
+            [
+                *base,
+                "--runtime-approval",
+                str(approval_path),
+                "--enable-network",
+            ]
+        )
+        == 0
+    )
+    assert calls == [(True, "test-explicit-approval")]
+    assert "network not called" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("protocol_id", "sparse-jepa-v1"), ("paper_config_sha256", "0" * 64)),
+)
+def test_runtime_approval_for_another_identity_is_denied(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    config = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
+    approval_path = tmp_path / "wrong-identity.json"
+    payload = _runtime_approval_payload(config, target_acquisition=True)
+    payload[field] = value
+    write_json_atomic(approval_path, payload)
+
+    with pytest.raises(PermissionError, match="does not match"):
+        load_runtime_approval(approval_path, config)
+
+
+def test_v2_run_uses_frozen_daily_formation_state_without_v1_key() -> None:
+    config = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
+
+    result = run_authorized_stages(
+        config,
+        network_cli_enabled=False,
+        training_cli_enabled=False,
+        full_run_cli_enabled=False,
+    )
+
+    assert file_sha256(config.root / "design-freeze-v2.json") == (
+        "eea790c79c16e69ee3997c8c964e7716049c379e1cbb248b2602acd2e19b8d27"
+    )
+    assert "formation_corpus_root" not in config.data
+    assert result == {"build_universe": "reused", "download_data": "DATA NOT ACQUIRED"}
+
+
+def test_cli_v2_run_reaches_target_gate_without_authorization(capsys) -> None:
+    assert (
+        main(
+            [
+                "ml",
+                "paper",
+                "run",
+                "--config",
+                "configs/paper/sparse_jepa_v2/data.yaml",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"build_universe": "reused", "download_data": "DATA NOT ACQUIRED"}
+
+
+def test_formation_readiness_dispatches_by_protocol(monkeypatch) -> None:
+    import execsim.ml.paper.orchestration as orchestration
+
+    v1 = load_paper_config(Path("configs/paper/sparse_jepa"))
+    v2 = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
+    observed: list[Path] = []
+
+    def record_minute_corpus(path: Path) -> bool:
+        observed.append(path)
+        return True
+
+    monkeypatch.setattr(orchestration, "_has_parquet_corpus", record_minute_corpus)
+
+    assert _formation_artifacts_ready(v1)
+    assert observed == [Path(v1.data["formation_corpus_root"])]
+    observed.clear()
+    assert _formation_artifacts_ready(v2)
+    assert observed == []

@@ -30,7 +30,7 @@ from execsim.data.paper.resolution_quality import assess_session_resolution_qual
 from execsim.data.paper.schemas import InstrumentSymbolInterval
 from execsim.data.paper.universe import select_frozen_universe, write_universe_manifest
 from execsim.data.paper.validation import validate_exact_xnys_session
-from execsim.ml.paper.configs import PaperRunConfig
+from execsim.ml.paper.configs import PaperRunConfig, PaperRuntimeApproval
 from execsim.ml.sequences.corpus import build_fold_sequence_corpus
 
 
@@ -207,7 +207,12 @@ def _build_v2_universe_stage(config: PaperRunConfig) -> dict[str, object]:
     }
 
 
-def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[str, object]:
+def download_data_stage(
+    config: PaperRunConfig,
+    *,
+    cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Acquire formation candidates, freeze the universe, then acquire target bars."""
     from execsim.data.paper.acquisition import (
         acquire_chunk,
@@ -219,7 +224,7 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
     from execsim.data.paper.schemas import PaperDataConfig
     from execsim.data.paper.sources import acquire_constituent_identity_sources
 
-    config.authorize("network", cli_enabled=cli_enabled)
+    config.authorize("target_acquisition", approval=runtime_approval, cli_enabled=cli_enabled)
     snapshot_path = Path(config.data["constituent_snapshot"])
     ticker_path = Path(config.data["ticker_history"])
     formation_start = _as_date(config.data["formation_period"][0])
@@ -289,7 +294,7 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
             receipt_path=Path(config.data["formation_daily_receipt"]),
             paper_config_hash=config.config_hash,
             cli_enabled=True,
-            config_enabled=config.allow_network,
+            config_enabled=True,
         )
         formation_chunks: int | dict[str, object] = daily_receipt
         formation_output = str(config.data["formation_daily_corpus"])
@@ -473,12 +478,16 @@ def validate_sequences_stage(config: PaperRunConfig) -> dict[str, object]:
 def select_rdm_lambda_stage(
     config: PaperRunConfig,
     *,
-    allow_historical_training: bool,
+    training_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
     trusted_local_resume: bool = False,
 ) -> dict[str, object]:
     """Run the six predeclared Fold 1 candidates and freeze one common coefficient."""
-    if not allow_historical_training:
-        raise PermissionError("RDM lambda selection requires historical-training authorization.")
+    config.authorize(
+        "historical_training",
+        approval=runtime_approval,
+        cli_enabled=training_cli_enabled,
+    )
     import torch
 
     from execsim.ml.representations.checkpoints import load_checkpoint
@@ -622,7 +631,8 @@ def select_rdm_lambda_stage(
 def train_representations_stage(
     config: PaperRunConfig,
     *,
-    allow_historical_training: bool,
+    training_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
     trusted_local_resume: bool = False,
 ) -> dict[str, object]:
     """Train the locked fold/seed/dense-sparse matrix using streaming historical loaders."""
@@ -635,8 +645,11 @@ def train_representations_stage(
     from execsim.ml.representations.jepa import PredictiveRepresentationModel
     from execsim.ml.representations.schemas import CheckpointCompatibility, RepresentationConfig
 
-    if not allow_historical_training:
-        raise PermissionError("Historical representation training requires separate authorization.")
+    config.authorize(
+        "historical_training",
+        approval=runtime_approval,
+        cli_enabled=training_cli_enabled,
+    )
     values = config.representation
     options = HistoricalTrainerOptions(
         batch_size=int(values["batch_size"]),
@@ -656,7 +669,8 @@ def train_representations_stage(
     if not selection_path.is_file():
         select_rdm_lambda_stage(
             config,
-            allow_historical_training=True,
+            training_cli_enabled=training_cli_enabled,
+            runtime_approval=runtime_approval,
             trusted_local_resume=trusted_local_resume,
         )
     selection = _load_common_lambda_receipt(config)
@@ -825,11 +839,17 @@ def export_embeddings_stage(config: PaperRunConfig) -> dict[str, object]:
 
 
 def train_volume_models_stage(
-    config: PaperRunConfig, *, allow_historical_training: bool
+    config: PaperRunConfig,
+    *,
+    training_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
 ) -> dict[str, object]:
     """Train the exact validation-only LightGBM grid for all locked feature rows."""
-    if not allow_historical_training:
-        raise PermissionError("Historical LightGBM fitting requires separate authorization.")
+    config.authorize(
+        "historical_training",
+        approval=runtime_approval,
+        cli_enabled=training_cli_enabled,
+    )
     from execsim.data.paper.manifests import write_json_atomic
     from execsim.ml.models.lightgbm_adapter import (
         LightGBMConfig,
@@ -1003,8 +1023,18 @@ def train_volume_models_stage(
     }
 
 
-def evaluate_forecasts_stage(config: PaperRunConfig) -> dict[str, object]:
+def evaluate_forecasts_stage(
+    config: PaperRunConfig,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Evaluate frozen LightGBM artifacts on locked test rows without model selection."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     from execsim.forecasting import HistoricalProfileForecaster
     from execsim.ml.models.lightgbm_adapter import LightGBMVolumeModel
@@ -1167,8 +1197,18 @@ def evaluate_forecasts_stage(config: PaperRunConfig) -> dict[str, object]:
     return {"status": "SOFTWARE READY", "rows": len(output), "artifact": str(destination)}
 
 
-def evaluate_representations_stage(config: PaperRunConfig) -> dict[str, object]:
+def evaluate_representations_stage(
+    config: PaperRunConfig,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Run the frozen capacity ladder, observable probe, and exploratory support analysis."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     import json
 
@@ -1329,8 +1369,19 @@ def evaluate_representations_stage(config: PaperRunConfig) -> dict[str, object]:
     }
 
 
-def run_tca_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
+def run_tca_stage(
+    config: PaperRunConfig,
+    source: Path | None = None,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Run main, seed-specific, and 1%/5% ADV matched historical TCA outputs."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     from execsim.forecasting import HistoricalProfileForecaster
     from execsim.ml.models.lightgbm_adapter import LightGBMVolumeModel
@@ -1493,8 +1544,18 @@ def run_tca_stage(config: PaperRunConfig, source: Path | None = None) -> dict[st
     return {"status": "SOFTWARE READY", **paths}
 
 
-def report_stage(config: PaperRunConfig) -> dict[str, object]:
+def report_stage(
+    config: PaperRunConfig,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Construct named historical tables, matched inference, and the real report bundle."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     from execsim.ml.paper.reports import (
         FIGURE_NAMES,
@@ -1813,18 +1874,55 @@ def run_authorized_stages(
     network_cli_enabled: bool,
     training_cli_enabled: bool,
     full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None = None,
     trusted_local_resume: bool = False,
 ) -> dict[str, object]:
     """Resume idempotently through stages whose separate authorizations are present."""
     results: dict[str, object] = {}
     universe = Path(config.data["universe_manifest"])
-    formation_root = Path(config.data["formation_corpus_root"])
     target_root = Path(config.data["target_corpus_root"])
-    if not _is_frozen_universe(
-        universe, config_hash=config.config_hash
-    ) and not _has_parquet_corpus(formation_root):
-        if config.allow_network:
-            results["download_data"] = download_data_stage(config, cli_enabled=network_cli_enabled)
+    network_requested = network_cli_enabled or (
+        runtime_approval is not None and runtime_approval.approves("target_acquisition")
+    )
+    training_requested = training_cli_enabled or (
+        runtime_approval is not None and runtime_approval.approves("historical_training")
+    )
+    evaluation_requested = full_run_cli_enabled or (
+        runtime_approval is not None and runtime_approval.approves("locked_result_evaluation")
+    )
+    network_enabled = config.authorization_granted(
+        "target_acquisition", approval=runtime_approval, cli_enabled=network_cli_enabled
+    )
+    training_enabled = config.authorization_granted(
+        "historical_training", approval=runtime_approval, cli_enabled=training_cli_enabled
+    )
+    evaluation_enabled = config.authorization_granted(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
+    if network_requested and not network_enabled:
+        config.authorize(
+            "target_acquisition", approval=runtime_approval, cli_enabled=network_cli_enabled
+        )
+    if training_requested and not training_enabled:
+        config.authorize(
+            "historical_training", approval=runtime_approval, cli_enabled=training_cli_enabled
+        )
+    if evaluation_requested and not evaluation_enabled:
+        config.authorize(
+            "locked_result_evaluation",
+            approval=runtime_approval,
+            cli_enabled=full_run_cli_enabled,
+        )
+    frozen_universe = _is_frozen_universe(universe, config_hash=config.config_hash)
+    if not frozen_universe and not _formation_artifacts_ready(config):
+        if network_enabled:
+            results["download_data"] = download_data_stage(
+                config,
+                cli_enabled=network_cli_enabled,
+                runtime_approval=runtime_approval,
+            )
         else:
             results["download_data"] = "DATA NOT ACQUIRED"
             return results
@@ -1832,8 +1930,12 @@ def run_authorized_stages(
         results["build_universe"] = build_universe_stage(config)
     else:
         results["build_universe"] = "reused"
-    if config.allow_network and "download_data" not in results:
-        results["download_data"] = download_data_stage(config, cli_enabled=network_cli_enabled)
+    if network_enabled and "download_data" not in results:
+        results["download_data"] = download_data_stage(
+            config,
+            cli_enabled=network_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
     elif not _has_parquet_corpus(target_root):
         results["download_data"] = "DATA NOT ACQUIRED"
         return results
@@ -1859,39 +1961,62 @@ def run_authorized_stages(
             for name, value in config.representation["safe_resource_bounds"].items()
         },
     )
-    if config.allow_historical_training:
-        if not training_cli_enabled:
-            raise PermissionError("Paper run requires --enable-historical-training.")
+    if training_enabled:
         selection_receipt = config.artifact_root / "selection" / "rdm-lambda.json"
         if not selection_receipt.is_file():
             results["select_rdm_lambda"] = select_rdm_lambda_stage(
                 config,
-                allow_historical_training=True,
+                training_cli_enabled=training_cli_enabled,
+                runtime_approval=runtime_approval,
                 trusted_local_resume=trusted_local_resume,
             )
         else:
             results["select_rdm_lambda"] = "reused"
         results["train_representations"] = train_representations_stage(
             config,
-            allow_historical_training=True,
+            training_cli_enabled=training_cli_enabled,
+            runtime_approval=runtime_approval,
             trusted_local_resume=trusted_local_resume,
         )
         results["export_embeddings"] = export_embeddings_stage(config)
         results["train_volume_models"] = train_volume_models_stage(
-            config, allow_historical_training=True
+            config,
+            training_cli_enabled=training_cli_enabled,
+            runtime_approval=runtime_approval,
         )
     else:
         results["training"] = "TRAINING NOT RUN"
-    if config.allow_full_paper_run:
-        if not full_run_cli_enabled:
-            raise PermissionError("Paper run requires --enable-full-paper-run.")
-        results["evaluate_forecast"] = evaluate_forecasts_stage(config)
-        results["evaluate_representation"] = evaluate_representations_stage(config)
-        results["run_tca"] = run_tca_stage(config)
-        results["report"] = report_stage(config)
+    if evaluation_enabled:
+        results["evaluate_forecast"] = evaluate_forecasts_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
+        results["evaluate_representation"] = evaluate_representations_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
+        results["run_tca"] = run_tca_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
+        results["report"] = report_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
     else:
         results["evaluation"] = "EMPIRICAL RESULT NOT AVAILABLE"
     return results
+
+
+def _formation_artifacts_ready(config: PaperRunConfig) -> bool:
+    """Resolve formation readiness using the selected protocol's own data contract."""
+    if config.paper_run_id == "sparse-jepa-v2":
+        return Path(config.data["formation_daily_corpus"]).is_file()
+    return _has_parquet_corpus(Path(config.data["formation_corpus_root"]))
 
 
 def _assert_representation_reuse(
