@@ -41,7 +41,7 @@ def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
 
     calendar = xcals.get_calendar("XNYS")
     formation_start, formation_end = config.data["formation_period"]
-    expected = len(calendar.sessions_in_range(formation_start, formation_end))
+    expected = _expected_primary_session_count(calendar, formation_start, formation_end)
     candidates, exclusions = build_formation_candidates_from_corpus(
         snapshot, formation_root, expected_session_count=expected
     )
@@ -208,6 +208,14 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         "formation_output": str(config.data["formation_corpus_root"]),
         "target_output": str(config.data["target_corpus_root"]),
     }
+
+
+def _expected_primary_session_count(calendar: Any, start: object, end: object) -> int:
+    """Count only full 390-minute XNYS sessions eligible for the primary corpus."""
+    return sum(
+        len(calendar.session_minutes(session)) == 390
+        for session in calendar.sessions_in_range(start, end)
+    )
 
 
 def validate_data_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:

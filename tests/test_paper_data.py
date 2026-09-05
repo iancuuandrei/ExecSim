@@ -43,7 +43,7 @@ from execsim.data.paper.validation import (
     validate_exact_xnys_session,
     validate_paper_bars,
 )
-from execsim.ml.paper.orchestration import _acquire_period
+from execsim.ml.paper.orchestration import _acquire_period, _expected_primary_session_count
 
 
 def test_paper_acquisition_is_monthly_sip_and_disabled_by_default() -> None:
@@ -332,6 +332,14 @@ def test_streaming_formation_statistics_match_in_memory_builder(tmp_path: Path) 
 
     pd.testing.assert_frame_equal(streamed.reset_index(drop=True), in_memory.reset_index(drop=True))
     assert actual_exclusions == expected_exclusions
+
+
+def test_formation_completeness_denominator_excludes_early_closes() -> None:
+    import exchange_calendars as xcals
+
+    calendar = xcals.get_calendar("XNYS")
+
+    assert _expected_primary_session_count(calendar, "2021-01-04", "2021-12-31") == 251
 
 
 def test_universe_is_frozen_by_formation_liquidity_with_stable_ties() -> None:
