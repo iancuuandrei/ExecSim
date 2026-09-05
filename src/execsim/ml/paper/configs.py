@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -328,7 +329,12 @@ def _validate_v2_quality_sections(data: dict[str, Any], sequence: dict[str, Any]
     if (
         data.get("formation_frequency") != "1Day"
         or data.get("target_frequency") != "1min"
-        or data.get("formation_daily_completeness_minimum") != 0.95
+        or not math.isclose(
+            float(data.get("formation_daily_completeness_minimum", float("nan"))),
+            0.95,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
         or data.get("quality_hierarchy")
         != ["daily_formation", "token_15min_representation", "exact_minute_tca_window"]
         or data.get("missing_minute_policy") != "never_zero_fill_or_interpolate"

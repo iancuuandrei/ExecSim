@@ -109,18 +109,20 @@ def write_v2_formation_bundle(
     }
     diagnostics_path = output_directory / "formation-diagnostics-v2.json"
     write_json_atomic(diagnostics_path, diagnostics)
-    report_path.write_text(
-        _markdown_report(
-            comparison,
-            selected,
-            universe,
-            diagnostics,
-            daily_receipt,
-            quality_receipt,
-            plan,
-        ),
-        encoding="utf-8",
+    if report_path.name != "V2_FORMATION_QUALITY_REPORT.md":
+        raise ValueError("The v2 formation report must use its canonical filename.")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = _markdown_report(
+        comparison,
+        selected,
+        universe,
+        diagnostics,
+        daily_receipt,
+        quality_receipt,
+        plan,
     )
+    with report_path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(report)
     return {
         **diagnostics,
         "diagnostics_manifest_sha256": file_sha256(diagnostics_path),
