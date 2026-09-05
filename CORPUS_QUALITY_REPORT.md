@@ -7,11 +7,11 @@ Protocol: `sparse-jepa-v1`
 Acquisition-time design-freeze SHA-256: `4b15e8b8d4c38792e9141846e133727c9246f336960ae039e0432662a4b00d05`  
 Safe-default design-freeze SHA-256: `08a6fbf23bebbfc1fe4cc4ab13909c584fbbdd5b926c1b8601cd689a7573bc98`  
 Acquisition-time paper-config hash: `1ef2fc274174b7c7229a5e72709aa4ec5818b2a32fc255e698540214d406a3cb`  
-Empirical branch revision: `a3a73330354900f7de15e2a645015c14edd3ee90`
+Empirical branch revision: `65d07634ac6a1da6882b50370a485e5a5bb440fe`
 
 ## Decision
 
-The locked formation-universe gate failed. Only 59 of 505 formation constituents satisfy all frozen eligibility rules, while the protocol requires exactly 100. The dominant failure is the exact-minute session-completeness requirement: 446 candidates are below 95% complete sessions. The run stopped before freezing a universe, acquiring target-period bars, acquiring corporate actions for the selected universe, constructing folds, or training any model.
+The locked formation-universe gate failed. Only 62 of 505 formation constituents satisfy all frozen eligibility rules, while the protocol requires exactly 100. The dominant failure is the exact-minute session-completeness requirement: 443 candidates are below 95% complete sessions. The run stopped before freezing a universe, acquiring target-period bars, acquiring corporate actions for the selected universe, constructing folds, or training any model.
 
 The network-authorization flag was returned to its safe tracked default after acquisition. That operational-only correction changed the tracked freeze checksum but no scientific protocol field. Acquisition receipts and this report retain the exact acquisition-time configuration identity.
 
@@ -51,8 +51,8 @@ The formation snapshot contains 505 sourced share-class rows effective on 2021-0
 | Snapshot | `24c3f06a3aa68c0df21d9567983c59139d827c24ae1029bee4d7bf204eaff513` |
 | Ticker intervals | `323af75c2d85b7ffa02bd57b511518e0a3cc773d5b2e687e6bcead37d2fcd282` |
 | Formation receipt ledger identity | `538fe2c315ee78d7d5cacada73a1cc3db05e677c2f6ba8002238d2c555a6b664` |
-| Candidate table | `5d5af42ccc51dfc2f5ee8e63e6b5e90efc103cb133d99bb2a206f0b74c19d3de` |
-| Exclusion receipts | `d4a9df8ca9923304dbba6152f80e48bead690143189e79e619ede4a1e5f057d1` |
+| Candidate table | `efdf33664dd5b0db377ce324945bb5238fa8f5fa6d9bb59e9ee9c0299c5a0cbc` |
+| Exclusion receipts | `ec580c1f3223aa3bb5dac0ef65aba6a3f8c3748f89849fc0cf8affa58d575d42` |
 
 ## Locked universe eligibility
 
@@ -60,23 +60,23 @@ The formation snapshot contains 505 sourced share-class rows effective on 2021-0
 |---|---:|
 | Candidates | 505 |
 | Required universe size | 100 |
-| Eligible candidates | 59 |
-| Candidates below 95% exact-session completeness | 446 |
+| Eligible candidates | 62 |
+| Candidates below 95% exact-session completeness | 443 |
 | Candidates also below the $5 median-price floor | 107 |
 | Candidates also lacking positive median daily dollar volume | 107 |
-| Maximum observed candidate completeness | 99.6032% |
-| Median observed candidate completeness | 12.6984% |
-| 75th percentile candidate completeness | 66.2698% |
+| Maximum observed candidate completeness | 100.0000% |
+| Median observed candidate completeness | 12.7490% |
+| 75th percentile candidate completeness | 66.5339% |
 
-The 59 qualifying symbols, in formation median-dollar-volume rank order, are:
+The 62 qualifying symbols, in formation median-dollar-volume rank order, are:
 
-`TSLA, AAPL, MSFT, NVDA, FB, AMD, BA, BAC, JPM, PYPL, V, DIS, MU, C, INTC, XOM, WFC, PFE, T, CVX, WMT, QCOM, F, JNJ, GM, AMAT, VZ, TWTR, GE, CSCO, ORCL, CCL, NKE, CMCSA, FCX, AAL, KO, UAL, BMY, SBUX, ATVI, VIAC, DAL, NEE, COP, OXY, NCLH, CVS, RTX, LUV, NEM, SLB, LVS, MO, MPC, DVN, DOW, MRO, KMI`.
+`TSLA, AAPL, MSFT, NVDA, FB, AMD, BA, BAC, JPM, PYPL, V, DIS, MU, C, CRM, INTC, XOM, WFC, PFE, T, CVX, WMT, QCOM, F, JNJ, GM, AMAT, VZ, TWTR, GE, CSCO, ORCL, CCL, NKE, CMCSA, FCX, AAL, KO, UAL, BMY, SBUX, ATVI, VIAC, DAL, NEE, COP, OXY, NCLH, CVS, RTX, LUV, NEM, SLB, LVS, MO, MPC, DVN, USB, DOW, TFC, MRO, KMI`.
 
 This list is not a frozen paper universe because it does not contain the required 100 instruments.
 
 ## SPY formation coverage
 
-SPY has 250 exact primary sessions out of 252 expected XNYS session dates. One standard session, 2021-05-05, contains 385 rows and is missing five expected minutes. The 2021-11-26 early close is excluded from the 390-minute primary corpus by design. Target-period SPY coverage and alignment are `NOT RUN`.
+SPY has 250 exact primary sessions out of 251 expected standard 390-minute XNYS sessions. One standard session, 2021-05-05, contains 385 rows and is missing five expected minutes. The 2021-11-26 early close is separately excluded from the 390-minute primary corpus by design. Target-period SPY coverage and alignment are `NOT RUN`.
 
 ## Exclusions and unavailable audits
 
@@ -84,7 +84,7 @@ At the formation gate, the available exclusion codes are:
 
 | Reason | Candidates |
 |---|---:|
-| `formation_session_completeness_below_95_percent` | 446 |
+| `formation_session_completeness_below_95_percent` | 443 |
 | `median_price_below_5` | 107 |
 | `nonpositive_median_daily_dollar_volume` | 107 |
 
