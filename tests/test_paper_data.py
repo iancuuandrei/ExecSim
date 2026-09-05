@@ -1,0 +1,318 @@
+from __future__ import annotations
+
+from datetime import date
+from io import BytesIO
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from execsim.data.paper.acquisition import acquire_chunk, authorize_acquisition, monthly_chunks
+from execsim.data.paper.corporate_actions import (
+    apply_point_in_time_split_adjustment,
+    point_in_time_split_factor,
+)
+from execsim.data.paper.identity import resolve_provider_symbol, validate_symbol_history
+from execsim.data.paper.manifests import stable_hash
+from execsim.data.paper.partitions import (
+    PAPER_FOLDS,
+    resolve_fold_partition,
+    validate_fold_membership,
+)
+from execsim.data.paper.schemas import (
+    InstrumentSymbolInterval,
+    PaperDataConfig,
+    ProviderResponse,
+)
+from execsim.data.paper.universe import select_frozen_universe
+from execsim.data.paper.validation import (
+    classify_session,
+    validate_exact_xnys_session,
+    validate_paper_bars,
+)
+from execsim.ml.paper.orchestration import _acquire_period
+
+
+def test_paper_acquisition_is_monthly_sip_and_disabled_by_default() -> None:
+    chunks = monthly_chunks("asset-1", "aapl", date(2024, 1, 15), date(2024, 3, 2))
+
+    assert [chunk.identity for chunk in chunks] == [
+        "asset-1-AAPL-20240115-20240131-sip-raw",
+        "asset-1-AAPL-20240201-20240229-sip-raw",
+        "asset-1-AAPL-20240301-20240302-sip-raw",
+    ]
+    with pytest.raises(PermissionError, match="disabled"):
+        authorize_acquisition(PaperDataConfig(), cli_enabled=True)
+
+
+def test_corporate_action_requires_both_effective_and_known_times() -> None:
+    actions = pd.DataFrame(
+        {
+            "instrument_id": ["asset-1"] * 4,
+            "effective_date": ["2024-04-10", "2024-04-01", "2024-04-01", "2024-04-01"],
+            "available_at": pd.to_datetime(
+                [
+                    "2024-03-01T12:00:00Z",
+                    "2024-04-20T12:00:00Z",
+                    "2024-03-20T12:00:00Z",
+                    "2024-04-02T12:00:00Z",
+                ],
+                utc=True,
+            ),
+            "factor": [2.0, 3.0, 5.0, 7.0],
+        }
+    )
+    before_effective = pd.Timestamp("2024-04-05T16:00:00Z")
+    assert point_in_time_split_factor(
+        actions,
+        instrument_id="asset-1",
+        observation_at=before_effective,
+        market_information_as_of=before_effective,
+    ) == pytest.approx(5.0 * 7.0)
+    after_all_known = pd.Timestamp("2024-04-25T16:00:00Z")
+    assert point_in_time_split_factor(
+        actions,
+        instrument_id="asset-1",
+        observation_at=after_all_known,
+        market_information_as_of=after_all_known,
+    ) == pytest.approx(2.0 * 3.0 * 5.0 * 7.0)
+
+
+def test_authorized_chunk_is_atomic_idempotent_and_checksummed(tmp_path) -> None:
+    chunk = monthly_chunks("asset-1", "AAPL", date(2024, 1, 1), date(2024, 1, 31))[0]
+    calls = 0
+
+    def fetch(_chunk):
+        nonlocal calls
+        calls += 1
+        timestamps = pd.date_range(
+            "2024-01-03 09:30", periods=390, freq="min", tz="America/New_York"
+        )
+        frame = pd.DataFrame(
+            {
+                "instrument_id": "asset-1",
+                "symbol": "AAPL",
+                "timestamp": timestamps,
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 100.0,
+                "volume": 1_000,
+                "trade_count": 10,
+                "vwap": 100.0,
+            }
+        )
+        buffer = BytesIO()
+        frame.to_parquet(buffer, index=False)
+        return ProviderResponse(buffer.getvalue(), 390)
+
+    config = PaperDataConfig(allow_network=True)
+    first = acquire_chunk(
+        chunk,
+        output_directory=tmp_path,
+        fetch=fetch,
+        config=config,
+        cli_enabled=True,
+    )
+    second = acquire_chunk(
+        chunk,
+        output_directory=tmp_path,
+        fetch=fetch,
+        config=config,
+        cli_enabled=True,
+    )
+
+    assert first == second
+    assert first.row_count == 390
+    assert calls == 1
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_zero_row_acquisition_fails_and_sourced_ticker_history_resolves_identity(tmp_path) -> None:
+    chunk = monthly_chunks("asset-1", "OLD", date(2024, 1, 1), date(2024, 1, 31))[0]
+    with pytest.raises(RuntimeError, match="Acquisition failed"):
+        acquire_chunk(
+            chunk,
+            output_directory=tmp_path,
+            fetch=lambda _: ProviderResponse(b"not-empty", 0),
+            config=PaperDataConfig(allow_network=True),
+            cli_enabled=True,
+            max_attempts=1,
+        )
+    intervals = (
+        InstrumentSymbolInterval("asset-1", "OLD", date(2022, 1, 1), date(2024, 1, 31), "provider"),
+        InstrumentSymbolInterval(
+            "asset-1", "NEW", date(2024, 2, 1), date(2025, 12, 31), "provider"
+        ),
+    )
+    validate_symbol_history(intervals)
+    assert resolve_provider_symbol(intervals, "asset-1", date(2024, 1, 15)) == "OLD"
+    assert resolve_provider_symbol(intervals, "asset-1", date(2024, 2, 1)) == "NEW"
+    with pytest.raises(RuntimeError, match="BLOCKED"):
+        resolve_provider_symbol(intervals, "asset-2", date(2024, 2, 1))
+
+
+def test_acquisition_period_uses_sourced_partial_aliases_and_blocks_trading_day_gaps(
+    tmp_path,
+) -> None:
+    intervals = (
+        InstrumentSymbolInterval("asset-1", "OLD", date(2024, 1, 1), date(2024, 1, 15), "src"),
+        InstrumentSymbolInterval("asset-1", "NEW", date(2024, 1, 16), date(2024, 1, 31), "src"),
+    )
+    acquired = []
+
+    def record(chunk, **_):
+        acquired.append(chunk)
+
+    completed = _acquire_period(
+        ("asset-1",),
+        intervals,
+        start=date(2024, 1, 1),
+        end=date(2024, 1, 31),
+        output=tmp_path,
+        fetcher=object(),
+        data=PaperDataConfig(allow_network=True),
+        acquire_chunk=record,
+        monthly_chunks=monthly_chunks,
+    )
+
+    assert completed == 2
+    assert [(item.symbol, item.start, item.end) for item in acquired] == [
+        ("OLD", date(2024, 1, 1), date(2024, 1, 15)),
+        ("NEW", date(2024, 1, 16), date(2024, 1, 31)),
+    ]
+    with pytest.raises(RuntimeError, match="BLOCKED"):
+        _acquire_period(
+            ("asset-1",),
+            intervals[:1],
+            start=date(2024, 1, 1),
+            end=date(2024, 1, 31),
+            output=tmp_path,
+            fetcher=object(),
+            data=PaperDataConfig(allow_network=True),
+            acquire_chunk=record,
+            monthly_chunks=monthly_chunks,
+        )
+
+
+def test_universe_is_frozen_by_formation_liquidity_with_stable_ties() -> None:
+    candidates = pd.DataFrame(
+        {
+            "instrument_id": [f"id-{index:03d}" for index in range(101)],
+            "symbol": [f"S{index:03d}" for index in range(101)],
+            "security_type": ["ordinary_common_stock"] * 101,
+            "in_sp500_on_formation_date": [True] * 101,
+            "median_price": [10.0] * 101,
+            "session_completeness": [0.99] * 101,
+            "median_daily_dollar_volume": list(range(101, 0, -1)),
+        }
+    )
+
+    members = select_frozen_universe(candidates)
+
+    assert len(members) == 100
+    assert members[0].instrument_id == "id-000"
+    assert members[-1].instrument_id == "id-099"
+    assert members[0].liquidity_group == 1
+    assert members[-1].liquidity_group == 5
+
+
+def test_split_adjustment_preserves_dollar_notional_and_fold_dates_are_locked() -> None:
+    bars = pd.DataFrame(
+        {
+            "open": [100.0, 50.0],
+            "high": [101.0, 51.0],
+            "low": [99.0, 49.0],
+            "close": [100.0, 50.0],
+            "vwap": [100.0, 50.0],
+            "volume": [10.0, 20.0],
+        }
+    )
+    adjusted = apply_point_in_time_split_adjustment(bars, pd.Series([2.0, 1.0]))
+
+    assert np.allclose(bars["vwap"] * bars["volume"], adjusted["vwap"] * adjusted["volume"])
+    with pytest.raises(ValueError, match="known after"):
+        apply_point_in_time_split_adjustment(
+            bars,
+            pd.Series([2.0, 1.0]),
+            factor_available_at=pd.Series(pd.to_datetime(["2024-01-03", "2024-01-01"], utc=True)),
+            as_of=pd.Timestamp("2024-01-02", tz="UTC"),
+        )
+    assert PAPER_FOLDS[0].partition(date(2024, 4, 1)) == "test"
+    assert PAPER_FOLDS[1].partition(date(2024, 4, 1)) == "train"
+    assert stable_hash({"b": 2, "a": 1}) == stable_hash({"a": 1, "b": 2})
+
+
+def test_regular_session_validation_never_treats_missing_minutes_as_zero() -> None:
+    timestamps = pd.date_range("2024-01-03 09:30", periods=389, freq="min", tz="America/New_York")
+    bars = pd.DataFrame(
+        {
+            "instrument_id": "asset-1",
+            "symbol": "AAPL",
+            "timestamp": timestamps,
+            "open": 100.0,
+            "high": 100.1,
+            "low": 99.9,
+            "close": 100.0,
+            "volume": 100,
+            "trade_count": 10,
+            "vwap": 100.0,
+        }
+    )
+
+    errors = validate_paper_bars(bars)
+
+    assert any("requires 390 observed minutes" in error for error in errors)
+    assert classify_session(observed_minutes=390, calendar_early_close=False) == "primary_regular"
+    assert (
+        classify_session(observed_minutes=210, calendar_early_close=True)
+        == "robustness_early_close"
+    )
+
+
+def test_fold_membership_is_derived_and_expanding_dates_are_fold_scoped() -> None:
+    assert resolve_fold_partition("fold-1", date(2024, 4, 1)) == "test"
+    assert resolve_fold_partition("fold-2", date(2024, 4, 1)) == "train"
+    validate_fold_membership(
+        (
+            ("fold-1", "asset-1", date(2024, 4, 1), "test"),
+            ("fold-2", "asset-1", date(2024, 4, 1), "train"),
+        )
+    )
+    with pytest.raises(ValueError, match="mismatch"):
+        validate_fold_membership((("fold-1", "asset-1", date(2024, 4, 1), "train"),))
+
+
+def test_exact_xnys_grid_rejects_compensating_extra_timezone_and_order_corruption() -> None:
+    timestamps = pd.date_range("2024-01-03 09:30", periods=390, freq="min", tz="America/New_York")
+    frame = pd.DataFrame(
+        {
+            "instrument_id": "asset-1",
+            "symbol": "AAPL",
+            "timestamp": timestamps,
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.0,
+            "close": 100.0,
+            "volume": 1_000,
+            "trade_count": 10,
+            "vwap": 100.0,
+        }
+    )
+    assert not validate_exact_xnys_session(frame)
+    compensated = frame.loc[
+        frame["timestamp"] != pd.Timestamp("2024-01-03 10:00", tz="America/New_York")
+    ].copy()
+    extra = frame.iloc[[0]].copy()
+    extra["timestamp"] = pd.Timestamp("2024-01-03 16:00", tz="America/New_York")
+    compensated = pd.concat((compensated, extra), ignore_index=True).sort_values("timestamp")
+    assert any("exact XNYS grid" in error for error in validate_exact_xnys_session(compensated))
+    wrong_timezone = frame.copy()
+    wrong_timezone["timestamp"] = wrong_timezone["timestamp"].dt.tz_convert("UTC")
+    assert any("timezone" in error for error in validate_exact_xnys_session(wrong_timezone))
+    reordered = frame.copy()
+    reordered.iloc[[0, 1]] = reordered.iloc[[1, 0]].to_numpy()
+    assert any("strictly ordered" in error for error in validate_exact_xnys_session(reordered))
+    duplicated = frame.copy()
+    duplicated.loc[1, "timestamp"] = duplicated.loc[0, "timestamp"]
+    assert any("duplicate" in error for error in validate_exact_xnys_session(duplicated))

@@ -1,0 +1,15 @@
+schema_version: paper-sequence-v2
+token_minutes: 15
+session_tokens: 26
+feature_count: 18
+context_length: 8
+minimum_context: 4
+first_as_of: "10:30"
+horizons: [1, 2, 4, 8]
+training_as_of_samples_per_session_epoch: 2
+clip_quantiles: [0.005, 0.995]
+scaling: median_iqr
+revin: false
+num_workers: 0
+prefetch_factor: 2
+session_cache_size: 32

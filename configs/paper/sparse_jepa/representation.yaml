@@ -1,0 +1,60 @@
+observed_feature_dim: 18
+feature_dim: 13
+conditioning_dim: 5
+latent_dim: 128
+geometries: [dense, sparse]
+dense_target: {p: 2.0, mu: 0.0, sigma: 1.0, link: identity}
+sparse_target:
+  p: 2.0
+  mu: -0.6744897501960817
+  sigma: 1.0
+  link: rep_relu
+  normalization: derived_rectified_rms
+appendix_laplace_control:
+  name: sparse_rectified_laplace
+  p: 1.0
+  mu: -0.49012907173427356
+  sigma: 0.7071067811865476
+  zero_fraction: 0.75
+  main_table: false
+sparsity_sweep_zero_fractions: [0.5, 0.75, 0.875]
+predictor_family: mlp
+probe_capacity_ladder: [affine_ridge, mlp_64, mlp_256]
+probe_ridge_alphas: [0.1, 1.0, 10.0]
+probe_mlp_epochs: 20
+seeds: [13, 29, 47]
+rdm_projections_train: 512
+rdm_projections_evaluation: 2048
+rdm_diagnostic_sample_rows: 2048
+rdm_lambda_candidates: [0.1, 1.0, 10.0]
+rdm_lambda_selection_fold: fold-1
+rdm_lambda_selection_seed: 13
+optimizer: adamw
+learning_rate: 0.0003
+weight_decay: 0.0001
+warmup_fraction: 0.05
+gradient_clip: 1.0
+batch_size: 256
+max_epochs: 40
+early_stopping_patience: 6
+future_difficulty_adaptation:
+  source: causal_historical_volume_profile
+  weight: mean_of_separate_level_and_shape_cdf_within_asof
+  minimum_raw_weight: 0.5
+  additional_step_fraction: 0.1
+  learning_rate: 0.00003
+  apply_to_rdmreg: false
+  paper_matrix: false
+checkpoint_interval_steps: 500
+dormant_future_axes:
+  encoder_capacity: [64, 128, 256]
+  predictor_capacity: [affine, small_mlp, medium_mlp, larger_temporal_model]
+  latent_dimension: [64, 128, 256]
+  target_sparsity: [0.5, 0.75, 0.875]
+  training_data_scale: [25, 50, 100]
+  market_complexity_stratum: [ordinary, unusual]
+safe_resource_bounds:
+  maximum_representation_runs: 29
+  maximum_jepa_steps: 10000000
+  maximum_shape_rows: 25000000
+  maximum_embedding_bytes: 200000000000

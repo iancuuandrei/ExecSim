@@ -24,6 +24,28 @@ The active implementation directions are:
 | Performance architecture | Cache causally filtered historical matrices and reuse exact-horizon OSQP setups through `OptimalExecutionWorkspace` | Profiling identified repeated forecast reconstruction as dominant; exact-horizon reuse preserves the original integer schedule |
 | QP validation levels | Use structural convexity validation in adaptive MPC and full eigenvalue validation in static or standalone solves | Positive temporary curvature and positive-semidefinite added terms prove convexity without repeated cubic work in the hot path |
 | ML dataset memory | Discover symbols with bounded Arrow batches and build one symbol partition at a time; CLI builds do not retain result rows | This prevents a future multi-symbol, multi-year universe from becoming one pandas DataFrame |
+| Paper research boundary | Compare matched dense and sparse predictive representations only through causal volume forecasts and fixed deterministic MPC/TCA | This isolates representation geometry without allowing a learned model to choose trades or constraints |
+| Paper corpus | Freeze a formation-period 100-stock universe and acquire immutable Alpaca SIP minute responses in resumable monthly chunks | Stable instruments, hashes, failure receipts, and no IEX fallback make the licensed corpus auditable |
+| Paper sequence representation | Store one 26-by-18 tensor per regular session and derive indexed eight-token contexts with direct 1/2/4/8-token targets | Session storage avoids overlapping materialization and explicit indexes preserve point-in-time cutoffs |
+| Paper representation hierarchy | Test frozen representation accessibility, then information retention, supervised forecast value, and finally fixed execution decision value | This ordering separates what the representation contains from whether a downstream learner or optimizer can use it |
+| Paper feature boundary | Store 18 causal observations, encode 13 dynamic fields, and pass five current clock, ADV, and cumulative-volume fields only as predictor conditioning | Exogenous scale and clock state must not define the learned representation |
+| Sparse representation | Use a shared encoder, exact-forward RepReLU, a primary rectified-Gaussian RDMReg target, and no EMA or stop-gradient target | Gaussian dense and sparse targets isolate non-negativity and support before the Laplace tail-shape appendix |
+| Paper comparison fairness | Mask linked padding before every predictor and use identical primary dense/sparse initialization distributions | Encoder bias and sparse-only output bias otherwise create avoidable comparison confounds |
+| Sparse target normalization | Derive rectified moments and RMS from each configured generalized-Gaussian target | The 0.5 RMS applies only to the 75%-zero Laplace setting |
+| Paper RDM coefficient | Select one common value from 0.1, 1, and 10 on Fold 1 validation with seed 13 and freeze it for both geometries | Geometry-specific tuning would confound the matched comparison |
+| Paper frozen probes | Reuse one selected encoder for horizon-specific affine, 64-unit MLP, and 256-unit MLP dynamics probes plus a fixed volume-surprise probe | Retraining encoders per capacity or using the JEPA predictor for retention would confound accessibility with representation learning |
+| Paper distribution diagnostics | Compute the 2,048-projection FP32 RDM diagnostic over a deterministic bounded sample of actual valid encoder latents | Validation memory remains bounded without admitting padding or predictions into the distribution comparison |
+| Paper controls and seeds | Use a frozen untrained nonlinear neural control and evaluate seed-specific metric effects; reserve forecast ensembling for an appendix | A linear projection is too weak a placebo, while primary ensembling hides training variability |
+| Paper supervised targets | Predict remaining-volume residual over a causal baseline and train shape on weighted deterministic origins from four time bands | The baseline anchors scale and inverse-probability weighting bounds long-form expansion without changing the estimand |
+| Paper decision clock | Solve once at each 15-minute boundary, commit the next minute-level segment, and compare with a matched realized-volume oracle | Forecast and optimization clocks must agree; minute replay remains responsible for realized capacity and cost attribution |
+| Historical paper execution | Use manifest-derived folds, exact XNYS grids, bounded sequence loaders, device-aware JEPA, long-form LightGBM shape rows, and 15-minute cached forecasts | The authorized historical study must run without per-session glue or target leakage |
+| Paper inference | Intersect exact complete cases before date averaging and resample blocks within folds | Pairing and fold contribution must be preserved before uncertainty estimation |
+| Paper protocol freeze | Require a source-hashed protocol freeze and a checksummed validation-only parameter freeze before locked-test stages | Missing or changed selections must fail closed rather than be reconstructed after test inspection |
+| Paper resource planning | Derive step, long-shape-row, embedding-storage, and run-count bounds from sequence manifests before training | The full protocol must abort before exceeding configured safe limits and timing estimates must name their measured device and scope |
+| Paper reporting hierarchy | Keep four main tables and four main figures for data, accessibility, forecasting, and execution; write support, regime, block, sparsity, and sensitivity output as appendix artifacts | Secondary characterization cannot replace a failed primary comparison |
+| Paper dependencies | Keep PyTorch 2.13.0, safetensors 0.8.0, and LightGBM 4.7.0 in exact-version optional extras | Ordinary simulation remains lightweight while paper artifacts record the evaluated dependency identity |
+| Paper execution authorization | Disable network acquisition, historical fitting, and full paper runs in both configuration and CLI by default | Synthetic acceptance must never silently trigger licensed downloads or empirical training |
+| Paper artifact provenance | Use safetensors and native LightGBM models plus checksummed, compatibility-complete checkpoint, embedding, and run manifests | Reuse must fail closed when any data, fold, cutoff, model, environment, or downstream identity changes |
 
 Apply this order of precedence:
 
@@ -182,8 +204,7 @@ Public modules, classes, and non-obvious functions require docstrings. Begin wit
 Name tests after observable behavior or an invariant, for example:
 
 ```python
-def test_integer_projection_preserves_quantity_and_capacities() -> None:
-    ...
+def test_integer_projection_preserves_quantity_and_capacities() -> None: ...
 ```
 
 - Keep tests deterministic and independent of network services by default.

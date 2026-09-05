@@ -71,6 +71,12 @@ Experiment run IDs hash the canonical specification. A run reuses historical pro
 
 Historical training is disabled unless `allow_historical_training=true`; V1 acceptance does not grant that authorization. `--dry-run` resolves manifests, schemas, folds, model grids, artifacts, warnings, and evaluation intent without fitting. Tests may fit tiny `synthetic_fixture` datasets.
 
+## Sparse predictive-representation paper contract
+
+[The sparse predictive-representation paper specification](PAPER_DESIGN.md) defines the frozen Alpaca SIP universe, exact XNYS validation, corpus-wide 26-by-18 session tensors with a 13-feature encoder and five predictor-conditioning fields, matched dense-Gaussian and sparse-rectified-Gaussian JEPA, exact RepReLU, derived rectified RDMReg moments, bounded FP32 distribution diagnostics, streaming device-aware training, frozen capacity and observable probes, residual-scale and bounded long-form-shape LightGBM targets, compatibility-complete artifacts, locked folds, 15-minute committed execution, continuous realized-volume oracle regret, and matched fold-safe inference. These software paths are `IMPLEMENTED` and use the same APIs in the deterministic multi-session fixture and future historical run. Provider acquisition is `DATA NOT ACQUIRED`; historical fitting is `TRAINING NOT RUN`; empirical results are `EMPIRICAL RESULT NOT AVAILABLE`. Each remains separately authorized.
+
+[The paper implementation report](PAPER_IMPLEMENTATION_REPORT.md) records the final local gate evidence, numerical fixtures, performance telemetry, and the explicit `NOT RUN` empirical boundary.
+
 ## Command contract
 
 The CLI provides these command groups:
@@ -78,7 +84,7 @@ The CLI provides these command groups:
 - data: `download-data`, `validate-data`, and `build-manifest`;
 - policies: `simulate --strategy ...` and the `simulate-twap` compatibility alias;
 - research: `experiment run`, `experiment report`, and `scenario`;
-- ML: `build-dataset`, `validate-dataset`, `inspect-dataset`, `create-splits`, `training-plan`, and `train --dry-run`;
+- ML: `build-dataset`, `validate-dataset`, `inspect-dataset`, `create-splits`, `training-plan`, `train --dry-run`, and the nested manifest-driven `paper` workflow, including `paper run`;
 - diagnostics: `show-config` and `smoke`.
 
 Commands return zero on success. Validation returns one for invalid data. Contract errors fail with a concise parser error. `--json` emits machine-readable simulation output.

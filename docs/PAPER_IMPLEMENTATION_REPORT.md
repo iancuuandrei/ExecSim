@@ -1,0 +1,225 @@
+# Sparse-JEPA paper implementation report
+
+This report records the software state of PR #2 after the research-program
+redirect on 2026-09-05. It distinguishes executable software evidence from
+licensed-data, historical-training, and empirical evidence. It makes no claim
+about representation quality, forecast accuracy, execution cost, or economic
+value.
+
+## Status
+
+| Evidence class | Status |
+|---|---|
+| Redirected historical experiment software | **SOFTWARE READY** |
+| Real Alpaca SIP corpus | **DATA NOT ACQUIRED** |
+| Historical JEPA and LightGBM fits | **TRAINING NOT RUN** |
+| Locked-test representation, forecast, execution, and paper estimates | **EMPIRICAL RESULT NOT AVAILABLE** |
+
+The redirected work began from PR head
+`74bca4403cd351579221a86736d77210821adde3`. Its baseline was 118 passing
+tests, Ruff lint and format, mypy, and repository-context validation over 14
+registered areas. The implementation preserves the ordinary
+`VolumeForecast -> deterministic MPC -> TCA` boundary and changes no execution
+cost or fill mathematics outside the paper subsystem.
+
+## Blockers and exact corrections
+
+| Blocker | Correction |
+|---|---|
+| The study mixed representation geometry, difficulty adaptation, forecast value, and execution value too early | The frozen evidence chain is now accessibility, observable retention, supervised forecast value, then decision value. Difficulty adaptation is outside the paper matrix. |
+| Laplace was the primary sparse target | The matched primary pair is dense Gaussian versus sparse rectified Gaussian with `p=2`, `mu=-0.6744897501960817`, and `sigma=1`. Rectified Laplace is appendix-only. |
+| The encoder saw exogenous clock and scale fields | Stored tensors remain 18-wide, but only 13 dynamic features enter the encoder. Five known-at-decision fields condition the predictor. Schema and artifact identities changed incompatibly. |
+| Sparse RDM normalization was fixed at 0.5 | Linked first and second moments and target RMS are derived analytically from `(p, mu, sigma)`, persisted, and Monte Carlo checked. |
+| Padding and sparse-only initialization could confound geometry | Linked padded latents are structurally zeroed before every predictor and regularizer. Dense and sparse use identical seeded encoder and predictor initialization distributions. |
+| RDM strength was selected separately or through gradient calibration | A common coefficient is selected from `{0.1, 1, 10}` on Fold 1 validation, seed 13, using the mean fixed-observable ridge error across both geometries. The six-run receipt is checksummed and test/TCA-blind. |
+| Representation evaluation reused JEPA predictors | Encoders are frozen. Horizon-specific affine ridge, MLP-64, and MLP-256 probes are trained independently on TRAIN and selected on validation. Actual future latents are evaluation targets only. |
+| Latent error lacked a fixed normalization and baselines | Error is normalized by the TRAIN target-covariance trace, per horizon, and reported beside zero, TRAIN-mean, and persistence baselines. |
+| The observable probe was not fixed | Every probe predicts the same causal future-volume-surprise target. Complete origins are tokens 4 through 18 inclusive, so all `{1,2,4,8}` horizons exist. |
+| A linear random projection was a weak supervised placebo | The control is now an untrained nonlinear JEPA-shaped network with deterministic Fold 1 seed 13 weights and the same target-free inputs and 644-column interface. |
+| LightGBM targets and origin populations were under-specified | Scale predicts residual log remaining volume over the causal historical baseline. Shape is long-form, trained only on bounded predeclared origins, and normalized over valid shrinking future buckets. |
+| Historical feature identities could blur distinct clocks | Every artifact distinguishes training cutoff, market as-of time, and feature-history cutoff. Corporate actions carry known-at and effective-at semantics; rolling histories are TRAIN-derived and held out causally. |
+| Sparse support diagnostics lacked a predeclared unusual-session statistic | The exact OR composite uses TRAIN 90th-percentile thresholds for volume surprise, realized volatility, and historical-baseline curve error. The same statistic is evaluated on TRAIN and held-out rows, with chance support overlap reported. |
+| Minute-by-minute forecast refresh overstated the decision frequency | The paper runner commits each 15-minute segment. It compares against a realized-volume allocation oracle and reports normalized allocation regret, while the existing minute-level engine remains unchanged. |
+| Seed forecasts were averaged in the primary study | Every seed is a primary replicate. Effects are paired within seed and averaged as metrics; a three-seed forecast ensemble is appendix-only. |
+| Selection and locked-test stages were not separated by a durable freeze | After all validation-only representation and LightGBM selection completes, a parameter-freeze receipt records the config, Git head, common-lambda receipt, and every selected model checksum. Locked-test stages refuse to run without it. |
+| Resume could lose trainer decision state | Periodic trusted state now includes optimizer, scheduler, Python/NumPy/CPU/CUDA RNGs, sampler/RDM counters, early-stopping state, best eligible weights, diagnostics, epoch, and global step. Safe weights remain separate safetensors. |
+| Reporting could substitute synthetic or incomplete tables | Historical reporting requires four named nonempty schemas and measured intervals. Synthetic output remains explicitly synthetic. Missing historical artifacts fail closed. |
+| Compute feasibility had no executable gate | The run matrix is capped at 29 representation runs. Completed sequence manifests produce step, row, and storage bounds before training; configured safety limits block oversized work. A bounded kernel profiler makes no GPU-hours promise without representative evidence. |
+
+## Mathematical target contract
+
+For the symmetric generalized-Gaussian parameterization, let
+`a = p^(1/p) sigma`. For `mu <= 0`, define `t = |mu| / a`,
+`G_k = Gamma((k+1)/p, t^p)`, and `D = 2 Gamma(1/p)`. Then
+
+```text
+E[ReLU(X)]   = (mu G_0 + a G_1) / D
+E[ReLU(X)^2] = (mu^2 G_0 + 2 mu a G_1 + a^2 G_2) / D
+target_rms   = sqrt(E[ReLU(X)^2])
+```
+
+For positive `mu`, the implementation subtracts the corresponding negative
+tail moments from the full raw moments. The incomplete-gamma form avoids
+numerical quadrature. Gaussian and Laplace 50%, 75%, and 87.5%-zero settings
+are independently checked against deterministic Monte Carlo samples. The
+primary sparse target has 75% expected zeros; its RMS is derived rather than
+borrowed from the old Laplace target.
+
+## Executable historical architecture
+
+```text
+constituent snapshot + formation bars
+  -> formation statistics, eligibility, and exclusion receipts
+  -> frozen 100-stock universe with stable instrument and sourced symbol history
+  -> validated stock + SPY minute corpus and point-in-time action manifest
+  -> exact-grid fold sequence stores (18 observed = 13 dynamic + 5 conditioning)
+  -> TRAIN-only normalizers and deterministic sample indexes
+  -> common-lambda selection and streaming dense/sparse JEPA training
+  -> frozen accessibility and observable probes
+  -> compatibility-bound 640 latent + 4 availability embedding partitions
+  -> raw/untrained/dense/sparse residual-scale and long-shape LightGBM models
+  -> causal VolumeForecast providers
+  -> 15-minute committed MPC and realized-volume allocation oracle
+  -> exact complete-case contrasts and fold-stratified block bootstrap
+  -> named historical tables, main figures, and appendix artifacts
+```
+
+The six YAML files form one validated configuration with one canonical hash.
+Artifacts also store upstream manifest, fold, cutoff, normalization,
+architecture, target, training, checkpoint, and framework identities. Existing
+bytes never establish compatibility by themselves.
+
+## Streaming trainer and reproducible resume
+
+The historical trainer reads Parquet sessions lazily through a bounded cache.
+Each train epoch selects exactly two deterministic origins per session;
+validation and test use complete deterministic grids. Workers are Windows
+spawn-safe, use bounded prefetch, and do not own leakage-bearing mutable state.
+CUDA uses pinned memory and BF16 where supported; CPU and unsupported devices
+fall back to FP32. Training uses AdamW, 5% warmup, cosine decay, clipping, at
+most 40 epochs, and patience six.
+
+The trainer fails immediately on non-finite loss, gradients, or RDM output. Its
+2,048-projection FP32 diagnostic uses a deterministic uniform sample capped at
+2,048 valid actual latents. It selects only validation checkpoints passing
+collapse gates and writes latest, best, and final safetensors. A deterministic production-path fixture proves
+that continuous training and a forced interruption followed by checksummed,
+explicitly trusted resume produce exactly equal final tensors.
+
+## Frozen probes and supervised targets
+
+P0 is four independent horizon-specific affine ridge models. P1 and P2 are
+separate MLP-64 and MLP-256 probes; none reuse a geometry-specific JEPA
+predictor. Probe parameters, approximate MACs, and measured inference time are
+persisted beside normalized error and fixed baselines.
+
+The remaining-volume model has one row per `(instrument, session, as_of)` and
+predicts the residual over the causal baseline in log space. The shape model
+has one row per `(instrument, session, as_of, target_bucket)` and predicts
+`log(conditional_share + 1e-6)`. A native pandas categorical vocabulary is fit
+on TRAIN, persisted, reused unchanged, and checked on held-out data. The exact
+eight-candidate LightGBM grid is identical across raw, untrained, dense, and
+sparse rows. Validation selects scale and shape independently; test and TCA
+never select models.
+
+Embedding export includes only the current observed latent, predicted
+`h1/h2/h4/h8` latents, and four explicit availability flags: 644 values total.
+Unavailable horizons are zero-filled and marked unavailable. Actual future
+target latents are never exported.
+
+## Execution and inference contract
+
+At each 15-minute boundary the learned provider resolves causal normalized
+context and the matching frozen embedding, predicts residual scale and valid
+future-bucket shape, disaggregates with a TRAIN-only within-bin profile, and
+returns an ordinary `VolumeForecast`. The paper execution policy commits the
+resulting schedule for the next 15-minute segment. The established provider
+also supports causal truncation at +1, +7, and +14 minutes without restarting
+the within-token profile.
+
+The matched primary execution rows are EWMA, raw LightGBM, untrained nonlinear
+control, dense JEPA, and sparse JEPA, with seed-specific JEPA outputs. Symbol,
+date, order, side, market bars, constraints, cost assumptions, optimizer, and
+window are held fixed. The realized-volume oracle is an allocation reference,
+not a feasible live strategy. Normalized allocation regret is the principal
+decision metric; completion and implementation shortfall are diagnostics.
+
+## Statistical and reporting contract
+
+Duplicate method/case rows are rejected, exact common cases are intersected,
+and paired differences are formed before date aggregation. The primary
+moving-block bootstrap uses five-trading-day blocks within fold, 10,000
+replicates, and fold-stratified contribution. Block lengths one and ten are
+appendix sensitivities. The five confirmatory contrasts are named in the
+design freeze; if formal claims are made, their p-values use Holm adjustment.
+No arbitrary success threshold can turn an empirical outcome into a software
+gate.
+
+Main historical tables are dataset/folds/exclusions, representation
+accessibility, forecasting, and execution. Main figures are accessibility by
+probe capacity, forecast performance by model, forecast error by as-of, and
+paired allocation regret with measured intervals. Support/regime, sparsity,
+Laplace, block-length, order-size, and optional ensemble material remains in
+the appendix.
+
+## Executed software evidence
+
+The deterministic acceptance corpus contains four synthetic stocks plus SPY,
+40 sessions spanning two paper folds, causal seasonal history, a known-before-
+effective split, and a malformed excluded session. Tiny models and epochs
+exercise the same corpus, streaming, checkpoint, probe, embedding, supervised,
+provider, MPC, matching, bootstrap, and historical-schema paths intended for
+the future historical run.
+
+| Gate | Result |
+|---|---|
+| Pre-redirect complete pytest | `PASS` - 118 tests |
+| Redirected multi-session production-path fixture | `PASS` - 1 test in 183.07 s; oracle/diagnostic rerun 2 tests in 185.26 s |
+| Post-redirect complete pytest | `PASS` - 134 tests in 199.48 s |
+| Ruff lint | `PASS` |
+| Ruff format | `PASS` |
+| mypy | `PASS` - 118 source files |
+| Repository-context validation | `PASS` - 14 registered areas, context hash `75c2ad3276e5c434a7ccdd6d24e7616a74cbb32e3d38808327a4c58a9f9ded52` |
+| Ordinary ExecSim without PyTorch/LightGBM | `PASS` - guarded subprocess regression in the complete suite |
+| Real network request | `NOT RUN` |
+| Historical representation or LightGBM fit | `NOT RUN` |
+| Locked historical evaluation or TCA | `NOT RUN` |
+
+A bounded local CPU profile, which is not a historical runtime estimate,
+measured 8,141.60 streaming sequence rows/s over 616 fixture rows; 18,702.10 RDM
+rows/s for a 256-row, 512-projection batch; 37,050.44 embedding rows/s; and
+15.75 tiny TCA simulations/s. GPU peak memory and GPU hours are `NOT MEASURED`.
+Historical sequence counts and storage remain unknown until the real corpus
+manifests exist.
+
+## Files changed by responsibility
+
+- Protocol and governance: `docs/PAPER_DESIGN.md`, ADR 0008, the ADR index,
+  leakage contract, implementation directions/log, navigation, research
+  references, repository manifest, and all paper YAML/config-freeze files.
+- Sequence and data identities: the paper corporate-action module and sequence
+  schemas, builder, corpus, indexes, manifests, and streaming loader.
+- Representation system: target schemas and moments, encoder/JEPA/predictors,
+  checkpoints, historical trainer, diagnostics, selection, frozen evaluation,
+  embeddings, and export pipeline.
+- Forecast and execution system: LightGBM adapter/data frames, placebo features,
+  forecast provider, orchestration/CLI, regime diagnostics, TCA, matching,
+  statistics, compute planning, and reports.
+- Executable evidence: paper data, sequence, representation, and pipeline test
+  modules. Ordinary ExecSim modules and behavior remain outside this change.
+
+## Privileged stages still not run
+
+- Alpaca authentication, SIP entitlement, formation download, and target-period
+  download: **DATA NOT ACQUIRED**.
+- Real-universe freeze and historical corpus materialization: **DATA NOT
+  ACQUIRED**.
+- The 29-run ceiling is a plan, not executed work. Historical common-lambda,
+  primary dense/sparse, and appendix representation fits: **TRAINING NOT RUN**.
+- Historical LightGBM grids: **TRAINING NOT RUN**.
+- Locked-test accessibility, forecast, regime, execution, bootstrap, and final
+  paper estimates: **EMPIRICAL RESULT NOT AVAILABLE**.
+
+No synthetic result is an empirical paper result. PR #2 is locally merge-ready;
+final merge readiness additionally requires GitHub CI to pass on the exact
+pushed head.

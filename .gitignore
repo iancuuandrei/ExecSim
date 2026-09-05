@@ -5,6 +5,7 @@ venv/
 data/raw/
 data/processed/
 data/ml/
+data/paper/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -15,6 +16,7 @@ __pycache__/
 htmlcov/
 reports/runs/
 reports/scenarios/
+reports/paper/
 artifacts/
 tests/.tmp*
 *.prof

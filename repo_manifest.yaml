@@ -60,6 +60,30 @@ areas:
     specifications: [docs/standards/implementation.md, docs/ML_DESIGN.md, docs/DATA_LEAKAGE_CONTRACT.md]
     tests: [tests/test_ml_infrastructure.py]
     verify: [python -m pytest tests/test_ml_infrastructure.py]
+  paper_data:
+    roots: [src/execsim/data/paper, data/manifests]
+    purpose: Frozen formation universe, licensed SIP acquisition, corporate actions, partitions, and corpus receipts.
+    specifications: [docs/standards/implementation.md, docs/PAPER_DESIGN.md, docs/DATA_LEAKAGE_CONTRACT.md, docs/ADRs/0008-redirect-paper-to-representation-accessibility.md]
+    tests: [tests/test_paper_data.py]
+    verify: [python -m pytest tests/test_paper_data.py]
+  paper_sequences:
+    roots: [src/execsim/ml/sequences]
+    purpose: Causal 15-minute token features, fixed session tensors, train-only normalization, and sample indexes.
+    specifications: [docs/standards/implementation.md, docs/PAPER_DESIGN.md, docs/DATA_LEAKAGE_CONTRACT.md, docs/ADRs/0008-redirect-paper-to-representation-accessibility.md]
+    tests: [tests/test_paper_sequences.py]
+    verify: [python -m pytest tests/test_paper_sequences.py]
+  paper_representations:
+    roots: [src/execsim/ml/representations, src/execsim/ml/models/lightgbm_adapter.py, src/execsim/ml/models/random_projection.py]
+    purpose: Matched dense and rectified-Gaussian sparse JEPA, frozen accessibility probes, RDMReg, safe artifacts, and forecast models.
+    specifications: [docs/standards/implementation.md, docs/PAPER_DESIGN.md, docs/ML_DESIGN.md, docs/ADRs/0008-redirect-paper-to-representation-accessibility.md]
+    tests: [tests/test_paper_representations.py, tests/test_paper_pipeline.py]
+    verify: [python -m pytest tests/test_paper_representations.py tests/test_paper_pipeline.py]
+  paper_evaluation:
+    roots: [src/execsim/ml/paper, configs/paper, reports/paper]
+    purpose: Locked hierarchical paper planning, validation freeze, block inference, causal TCA, and main/appendix report bundles.
+    specifications: [docs/standards/implementation.md, docs/PAPER_DESIGN.md, docs/PAPER_IMPLEMENTATION_REPORT.md, docs/MATHEMATICAL_MODEL.md, docs/ADRs/0008-redirect-paper-to-representation-accessibility.md]
+    tests: [tests/test_paper_pipeline.py]
+    verify: [python -m pytest tests/test_paper_pipeline.py]
   cli:
     roots: [src/execsim/cli.py]
     purpose: Human and machine-readable entry points over the same library APIs.

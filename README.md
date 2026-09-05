@@ -53,6 +53,22 @@ Build and validate point-in-time rows without fitting historical data:
 
 Replace `DATASET_ID` with the ID printed by the build command. Historical model fitting is disabled by default; the test suite fits only tiny synthetic fixtures.
 
+## Inspect the sparse-JEPA paper plan
+
+Install the optional paper stack only for fixture or separately authorized research paths:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[paper]"
+```
+
+Expand the locked experiment without downloading data or fitting history:
+
+```powershell
+.\.venv\Scripts\python.exe -m execsim.cli ml paper plan --dry-run
+```
+
+The workflow requires separate configuration and command-line authorization for network acquisition, historical fitting, and full evaluation. `docs/PAPER_DESIGN.md` defines the causal sequence, representation, LightGBM, folds, statistics, and MPC/TCA contracts. `docs/PAPER_IMPLEMENTATION_REPORT.md` records the synthetic implementation evidence and the explicit `NOT RUN` historical boundary.
+
 ## Navigate the repository
 
 Use the manifest-backed context selector to find ownership, specifications, and focused checks:
@@ -70,6 +86,8 @@ Start with these documents:
 - `docs/MATHEMATICAL_MODEL.md` defines formulas, units, constraints, and signs.
 - `docs/DATA_LEAKAGE_CONTRACT.md` defines the point-in-time boundary.
 - `docs/ML_DESIGN.md` defines ML data, splits, training, and artifacts.
+- `docs/PAPER_DESIGN.md` defines the optional sparse predictive-representation study.
+- `docs/PAPER_IMPLEMENTATION_REPORT.md` classifies its software acceptance gates and empirical limitations.
 - `docs/NAVIGATION.md` maps repository areas.
 
 ## Understand the evidence boundary

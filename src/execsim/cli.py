@@ -82,6 +82,46 @@ def build_parser() -> argparse.ArgumentParser:
         command = ml_commands.add_parser(command_name)
         command.add_argument("--config", type=Path, default=Path("configs/ml.yaml"))
         command.add_argument("--dry-run", action="store_true")
+    paper = ml_commands.add_parser("paper", help="Plan or run the locked sparse-JEPA study.")
+    paper_commands = paper.add_subparsers(dest="paper_command", required=True)
+    for command_name in (
+        "build-universe",
+        "download-data",
+        "validate-data",
+        "build-sequences",
+        "validate-sequences",
+        "plan",
+        "plan-representation",
+        "train-representation",
+        "export-embeddings",
+        "train-volume-model",
+        "evaluate-forecast",
+        "evaluate-representation",
+        "run-tca",
+        "report",
+        "run",
+    ):
+        command = paper_commands.add_parser(command_name)
+        command.add_argument(
+            "--config",
+            type=Path,
+            default=Path("configs/paper/sparse_jepa/data.yaml"),
+        )
+        command.add_argument("--dry-run", action="store_true")
+        command.add_argument("--enable-network", action="store_true")
+        command.add_argument("--enable-historical-training", action="store_true")
+        command.add_argument("--enable-full-paper-run", action="store_true")
+        command.add_argument("--trust-local-resume", action="store_true")
+        command.add_argument("--synthetic-fixture", action="store_true")
+        command.add_argument("--input", type=Path, default=None)
+        command.add_argument("--output", type=Path, default=None)
+        command.add_argument("--instrument-id", default=None)
+        command.add_argument("--symbol", default=None)
+        command.add_argument("--cutoff", default=None)
+        command.add_argument("--seasonal-input", type=Path, default=None)
+        command.add_argument("--spy-input", type=Path, default=None)
+        command.add_argument("--spy-seasonal-input", type=Path, default=None)
+        command.add_argument("--previous-close", type=float, default=None)
     return parser
 
 
@@ -94,7 +134,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         return _dispatch(args)
-    except (FileNotFoundError, KeyError, TypeError, ValueError, RuntimeError) as exc:
+    except (
+        FileNotFoundError,
+        KeyError,
+        PermissionError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+    ) as exc:
         parser.error(str(exc))
     return 2
 
@@ -238,6 +285,8 @@ def _scenario(args: argparse.Namespace) -> int:
 
 
 def _ml(args: argparse.Namespace) -> int:
+    if args.ml_command == "paper":
+        return _paper(args)
     from execsim.ml.datasets import (
         DatasetBuildConfig,
         WalkForwardConfig,
@@ -317,6 +366,370 @@ def _ml(args: argparse.Namespace) -> int:
     )
     print(json.dumps(_to_dict(training_result), indent=2, default=str))
     return 0
+
+
+def _paper(args: argparse.Namespace) -> int:
+    from execsim.ml.paper.benchmark import build_compute_plan
+    from execsim.ml.paper.configs import load_paper_config
+
+    config = load_paper_config(args.config)
+    operation = None
+    if args.paper_command == "download-data":
+        operation = ("network", args.enable_network)
+    elif args.paper_command in {"train-representation", "train-volume-model"}:
+        if not args.synthetic_fixture:
+            operation = ("historical_training", args.enable_historical_training)
+    elif args.paper_command in {
+        "evaluate-forecast",
+        "evaluate-representation",
+        "run-tca",
+        "report",
+    }:
+        if not args.dry_run and not args.synthetic_fixture:
+            operation = ("full_paper_run", args.enable_full_paper_run)
+    if operation is not None:
+        config.authorize(operation[0], cli_enabled=operation[1])
+    if not args.dry_run:
+        result = _execute_paper_command(args, config)
+        if result is not None:
+            print(json.dumps(result, indent=2, default=str))
+            return 1 if result.get("valid") is False else 0
+    plan = build_compute_plan(
+        network_enabled=config.allow_network,
+        historical_training_enabled=config.allow_historical_training,
+        full_run_enabled=config.allow_full_paper_run,
+    )
+    payload = {
+        "command": args.paper_command,
+        "mode": "dry-run"
+        if args.dry_run
+        else "synthetic-fixture"
+        if args.synthetic_fixture
+        else "authorized",
+        "plan": asdict(plan),
+        "paper_run_id": config.paper_run_id,
+        "artifact_root": str(config.artifact_root),
+        "report_root": str(config.report_root),
+        "warning": (
+            "No network acquisition, historical training, or full paper evaluation was executed."
+            if args.dry_run
+            else "This planning command reports scope and performs no pipeline stage."
+        ),
+    }
+    print(json.dumps(payload, indent=2, default=str))
+    return 0
+
+
+def _execute_paper_command(args: argparse.Namespace, config: Any) -> dict[str, object] | None:
+    """Execute bounded paper operations after the command-level safety checks."""
+    if args.paper_command == "run":
+        from execsim.ml.paper.orchestration import run_authorized_stages
+
+        return run_authorized_stages(
+            config,
+            network_cli_enabled=args.enable_network,
+            training_cli_enabled=args.enable_historical_training,
+            full_run_cli_enabled=args.enable_full_paper_run,
+            trusted_local_resume=args.trust_local_resume,
+        )
+    if args.paper_command == "download-data":
+        from execsim.ml.paper.orchestration import download_data_stage
+
+        return download_data_stage(config, cli_enabled=args.enable_network)
+    if args.paper_command == "build-universe":
+        from execsim.ml.paper.orchestration import build_universe_stage
+
+        return build_universe_stage(config)
+    if args.paper_command == "validate-data":
+        from execsim.ml.paper.orchestration import validate_data_stage
+
+        return validate_data_stage(config, args.input)
+    if args.paper_command == "build-sequences":
+        from execsim.ml.paper.orchestration import build_sequences_stage
+
+        return build_sequences_stage(config, args.input)
+    if args.paper_command == "validate-sequences":
+        from execsim.ml.paper.orchestration import validate_sequences_stage
+
+        return validate_sequences_stage(config)
+    if args.paper_command == "train-representation" and args.synthetic_fixture:
+        from execsim.ml.representations.schemas import RepresentationConfig
+        from execsim.ml.representations.trainer import train_synthetic_fixture
+
+        dense = train_synthetic_fixture(RepresentationConfig("dense"), steps=2, batch_size=4)
+        sparse = train_synthetic_fixture(RepresentationConfig("sparse"), steps=2, batch_size=4)
+        return {
+            "data_classification": "synthetic_fixture",
+            "dense": asdict(dense),
+            "sparse": asdict(sparse),
+        }
+    if args.paper_command == "train-representation":
+        from execsim.ml.paper.orchestration import train_representations_stage
+
+        return train_representations_stage(
+            config,
+            allow_historical_training=args.enable_historical_training,
+            trusted_local_resume=args.trust_local_resume,
+        )
+    if args.paper_command == "train-volume-model" and args.synthetic_fixture:
+        import numpy as np
+
+        from execsim.ml.models.lightgbm_adapter import LightGBMConfig, LightGBMVolumeModel
+
+        rng = np.random.default_rng(13)
+        features = rng.normal(size=(32, 12))
+        total = np.exp(10 + features[:, 0])
+        shape = np.exp(features[:, :4])
+        shape /= shape.sum(axis=1, keepdims=True)
+        model = LightGBMVolumeModel(
+            LightGBMConfig(n_estimators=8, min_child_samples=2, num_threads=1)
+        ).fit(features, total, shape)
+        predicted_total, predicted_shape = model.predict(features[:2])
+        return {
+            "data_classification": "synthetic_fixture",
+            "remaining_volume": predicted_total.tolist(),
+            "shape_row_sums": predicted_shape.sum(axis=1).tolist(),
+        }
+    if args.paper_command == "train-volume-model":
+        from execsim.ml.paper.orchestration import train_volume_models_stage
+
+        return train_volume_models_stage(
+            config, allow_historical_training=args.enable_historical_training
+        )
+    if args.paper_command == "export-embeddings" and args.synthetic_fixture:
+        import hashlib
+
+        import numpy as np
+        import torch
+
+        from execsim.ml.representations.embeddings import (
+            export_frozen_embedding,
+            write_embedding_artifact_manifest,
+            write_embedding_parquet,
+        )
+        from execsim.ml.representations.jepa import PredictiveRepresentationModel
+        from execsim.ml.representations.schemas import RepresentationConfig
+
+        torch.manual_seed(13)
+        representation_model = PredictiveRepresentationModel(RepresentationConfig("sparse"))
+        context = torch.zeros((1, 8, 18))
+        mask = torch.ones((1, 8), dtype=torch.bool)
+        embedding = export_frozen_embedding(representation_model, context, mask)
+        checkpoint_hash = hashlib.sha256(b"synthetic-sparse-checkpoint").hexdigest()
+        sequence_hash = hashlib.sha256(b"synthetic-sequence").hexdigest()
+        payload: dict[str, object] = {
+            "data_classification": "synthetic_fixture",
+            "shape": list(embedding.shape),
+            "finite": bool(np.isfinite(embedding).all()),
+        }
+        if args.output is not None:
+            parquet_path = args.output / "synthetic-embedding.parquet"
+            write_embedding_parquet(
+                parquet_path,
+                embedding=embedding,
+                metadata={
+                    "instrument_id": "synthetic-asset",
+                    "symbol": "SYNTH",
+                    "session_date": "2024-01-03",
+                    "as_of": "2024-01-03T10:30:00-05:00",
+                    "fold_id": "fold-1",
+                    "seed": 13,
+                    "geometry": "sparse",
+                    "adaptation": "none",
+                    "predictor_family": "mlp",
+                    "checkpoint_hash": checkpoint_hash,
+                    "sequence_hash": sequence_hash,
+                    "cutoff": "2023-12-29",
+                    "component_order": "current,h1,h2,h4,h8,horizon_availability",
+                },
+            )
+            manifest = write_embedding_artifact_manifest(
+                args.output / "synthetic-embedding-manifest.json",
+                artifact_id="synthetic-embedding",
+                checkpoint_hash=checkpoint_hash,
+                partition_identity="fold-1/test",
+                row_count=1,
+                training_cutoff="2023-12-29",
+                source_hashes=(sequence_hash,),
+                parquet_path=parquet_path,
+            )
+            payload.update(
+                {
+                    "parquet": str(parquet_path),
+                    "manifest": str(args.output / "synthetic-embedding-manifest.json"),
+                    "parquet_sha256": manifest.parquet_sha256,
+                }
+            )
+        return payload
+    if args.paper_command == "export-embeddings":
+        from execsim.ml.paper.orchestration import export_embeddings_stage
+
+        return export_embeddings_stage(config)
+    if args.paper_command == "evaluate-representation" and args.synthetic_fixture:
+        import numpy as np
+
+        from execsim.ml.paper.benchmark import predictor_capacity_smoke
+        from execsim.ml.representations.diagnostics import representation_diagnostics
+
+        rng = np.random.default_rng(13)
+        dense_latents = rng.normal(size=(32, 128))
+        sparse_latents = np.maximum(rng.laplace(-0.49012907173427356, 2**-0.5, (32, 128)), 0)
+        return {
+            "data_classification": "synthetic_fixture",
+            "dense": representation_diagnostics(dense_latents),
+            "sparse": representation_diagnostics(sparse_latents),
+            "predictor_capacity": predictor_capacity_smoke(repetitions=1),
+        }
+    if args.paper_command == "evaluate-representation":
+        from execsim.ml.paper.orchestration import evaluate_representations_stage
+
+        return evaluate_representations_stage(config)
+    if args.paper_command == "evaluate-forecast" and args.synthetic_fixture:
+        import numpy as np
+
+        from execsim.ml.paper.statistics import paper_forecast_metrics
+
+        actual_total = np.asarray([100.0, 150.0, 220.0])
+        predicted_total = np.asarray([105.0, 143.0, 210.0])
+        actual_shape = np.asarray([[0.4, 0.6], [0.5, 0.5], [0.3, 0.7]])
+        predicted_shape = np.asarray([[0.42, 0.58], [0.48, 0.52], [0.35, 0.65]])
+        return {
+            "data_classification": "synthetic_fixture",
+            "metrics": paper_forecast_metrics(
+                actual_total, predicted_total, actual_shape, predicted_shape
+            ),
+        }
+    if args.paper_command == "evaluate-forecast":
+        from execsim.ml.paper.orchestration import evaluate_forecasts_stage
+
+        return evaluate_forecasts_stage(config)
+    if args.paper_command == "run-tca" and args.synthetic_fixture:
+        from datetime import date, time
+
+        import numpy as np
+        import pandas as pd
+
+        from execsim.ml.paper.tca import expand_volume_forecast
+        from execsim.orders import ParentOrder
+        from execsim.policies import AdaptiveMPCPolicy, ExecutionConstraints
+        from execsim.simulator import simulate_policy
+
+        timestamps = pd.date_range(
+            "2024-01-03 10:30", periods=15, freq="min", tz="America/New_York"
+        )
+        bars = pd.DataFrame(
+            {
+                "symbol": "SYNTH",
+                "timestamp": timestamps,
+                "open": 100.0,
+                "high": 100.1,
+                "low": 99.9,
+                "close": 100.0,
+                "volume": 1_000,
+                "trade_count": 100,
+                "vwap": 100.0,
+            }
+        )
+
+        class SyntheticPaperForecaster:
+            provider_id = "paper-synthetic"
+
+            def forecast(
+                self, *, symbol, session_date, generated_at, bucket_timestamps, observations=None
+            ):
+                del observations
+                buckets = tuple(bucket_timestamps)
+                return expand_volume_forecast(
+                    symbol=symbol,
+                    session_date=session_date,
+                    generated_at=generated_at,
+                    minute_timestamps=buckets,
+                    expected_remaining_volume=1_000.0 * len(buckets),
+                    conditional_token_shape=np.asarray([1.0]),
+                    within_token_profile=np.full(15, 1 / 15),
+                    training_cutoff=date(2023, 12, 29),
+                    manifest_hash="a" * 64,
+                    forecaster_id=self.provider_id,
+                )
+
+        result = simulate_policy(
+            parent_order=ParentOrder(
+                "SYNTH", "buy", 150, date(2024, 1, 3), time(10, 30), time(10, 45)
+            ),
+            bars=bars,
+            policy=AdaptiveMPCPolicy(temporary_impact=0.001, risk_aversion=0.0),
+            constraints=ExecutionConstraints(0.1, 0.1),
+            forecast_provider=SyntheticPaperForecaster(),
+        )
+        return {
+            "data_classification": "synthetic_fixture",
+            "requested_qty": result.summary.requested_qty,
+            "filled_qty": result.summary.filled_qty,
+            "optimization_decisions": result.summary.n_optimization_decisions,
+            "implementation_shortfall_bps": result.summary.implementation_shortfall_bps,
+        }
+    if args.paper_command == "run-tca":
+        from execsim.ml.paper.orchestration import run_tca_stage
+
+        return run_tca_stage(config, args.input)
+    if args.paper_command == "report" and args.synthetic_fixture:
+        import pandas as pd
+
+        from execsim.ml.paper.reports import TABLE_NAMES, write_paper_bundle
+
+        tables = {name: pd.DataFrame({"metric": [name], "value": [1.0]}) for name in TABLE_NAMES}
+        output = write_paper_bundle(
+            args.output or config.report_root,
+            paper_run_id=config.paper_run_id + "-synthetic",
+            tables=tables,
+            provenance={
+                "data_classification": "synthetic_fixture",
+                "network_acquisition": "NOT RUN",
+                "historical_training": "NOT RUN",
+            },
+        )
+        return {"data_classification": "synthetic_fixture", "output": str(output)}
+    if args.paper_command == "report":
+        from execsim.ml.paper.orchestration import report_stage
+
+        return report_stage(config)
+    if args.paper_command in {"plan", "plan-representation"}:
+        from execsim.ml.paper.benchmark import (
+            build_compute_plan,
+            predictor_capacity_smoke,
+            profile_paper_kernels,
+        )
+
+        planning_payload: dict[str, object] = {
+            "plan": asdict(
+                build_compute_plan(
+                    network_enabled=config.allow_network,
+                    historical_training_enabled=config.allow_historical_training,
+                    full_run_enabled=config.allow_full_paper_run,
+                )
+            ),
+            "measured_profile": asdict(profile_paper_kernels(args.input)),
+            "evidence_boundary": "bounded local profile; no historical fit or acquisition",
+        }
+        if args.paper_command == "plan-representation":
+            planning_payload["capacity_kernel_profile"] = predictor_capacity_smoke()
+        return planning_payload
+    raise ValueError(
+        f"{args.paper_command} requires --dry-run, --synthetic-fixture, "
+        "or supplied artifact inputs."
+    )
+
+
+def _required_path(value: Path | None, option: str) -> Path:
+    if value is None:
+        raise ValueError(f"This paper command requires {option}.")
+    return value
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _training_config(path: Path) -> Any:

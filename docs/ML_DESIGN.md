@@ -50,3 +50,7 @@ Total volume: MAE/RMSE on log volume and robust percentage error. Shape: share M
 ## Deliberate V1 non-action
 
 Only tiny synthetic fits in tests verify adapter and training mechanics. V1 does not fit repository history, search hyperparameters on real data, create real fitted artifacts, or report ML performance.
+
+## Paper research extension
+
+The accepted sparse predictive-representation extension is specified separately in [the paper design](PAPER_DESIGN.md). It adds optional PyTorch and LightGBM research paths while preserving this document's forecast-only boundary. Its software and numerical kernels are fixture-qualified; its licensed corpus acquisition, historical model fitting, model selection, test evaluation, and paper claims remain `NOT RUN` without separate authorization.

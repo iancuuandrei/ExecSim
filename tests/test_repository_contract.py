@@ -18,6 +18,13 @@ def test_manifest_references_existing_writing_and_implementation_specifications(
     assert (ROOT / manifest["authority"]["implementation_specification"]).is_file()
     assert "simulation" in manifest["areas"]
     assert "ml" in manifest["areas"]
+    assert "paper_data" in manifest["areas"]
+    assert "paper_sequences" in manifest["areas"]
+    assert "paper_representations" in manifest["areas"]
+    assert "paper_evaluation" in manifest["areas"]
+    assert (ROOT / "docs/PAPER_DESIGN.md").is_file()
+    assert (ROOT / "docs/PAPER_IMPLEMENTATION_REPORT.md").is_file()
+    assert (ROOT / "docs/ADRs/0006-sparse-predictive-representation-paper-framework.md").is_file()
 
 
 def test_repository_context_check_and_selection_are_deterministic() -> None:
