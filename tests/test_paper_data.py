@@ -19,8 +19,12 @@ from execsim.data.paper.corporate_actions import (
     apply_point_in_time_split_adjustment,
     point_in_time_split_factor,
 )
+from execsim.data.paper.formation import (
+    build_formation_candidates,
+    build_formation_candidates_from_corpus,
+)
 from execsim.data.paper.identity import resolve_provider_symbol, validate_symbol_history
-from execsim.data.paper.manifests import stable_hash
+from execsim.data.paper.manifests import stable_hash, write_json_atomic
 from execsim.data.paper.partitions import (
     PAPER_FOLDS,
     resolve_fold_partition,
@@ -275,6 +279,59 @@ def test_acquisition_period_records_zero_row_month_without_claiming_completion(
 
     assert completed == 1
     assert [item.start.month for item in attempted] == [1, 2]
+
+
+def test_streaming_formation_statistics_match_in_memory_builder(tmp_path: Path) -> None:
+    snapshot = pd.DataFrame(
+        {
+            "instrument_id": ["asset-1"],
+            "symbol": ["AAPL"],
+            "security_type": ["ordinary_common_stock"],
+            "effective_date": ["2021-01-04"],
+            "source": ["fixture"],
+        }
+    )
+    sessions = []
+    for session_date, close, volume in (
+        ("2021-01-04", 100.0, 1_000),
+        ("2021-02-01", 120.0, 2_000),
+    ):
+        timestamps = pd.date_range(
+            f"{session_date} 09:30", periods=390, freq="min", tz="America/New_York"
+        )
+        sessions.append(
+            pd.DataFrame(
+                {
+                    "instrument_id": "asset-1",
+                    "symbol": "AAPL",
+                    "timestamp": timestamps,
+                    "open": close,
+                    "high": close + 1,
+                    "low": close - 1,
+                    "close": close,
+                    "volume": volume,
+                    "trade_count": 10,
+                    "vwap": close,
+                }
+            )
+        )
+    for index, session in enumerate(sessions):
+        stem = tmp_path / f"chunk-{index}"
+        session.to_parquet(stem.with_suffix(".response"), index=False)
+        write_json_atomic(
+            stem.with_suffix(".json"),
+            {"status": "complete", "instrument_id": "asset-1"},
+        )
+
+    in_memory, expected_exclusions = build_formation_candidates(
+        snapshot, pd.concat(sessions, ignore_index=True), expected_session_count=2
+    )
+    streamed, actual_exclusions = build_formation_candidates_from_corpus(
+        snapshot, tmp_path, expected_session_count=2
+    )
+
+    pd.testing.assert_frame_equal(streamed.reset_index(drop=True), in_memory.reset_index(drop=True))
+    assert actual_exclusions == expected_exclusions
 
 
 def test_universe_is_frozen_by_formation_liquidity_with_stable_ties() -> None:

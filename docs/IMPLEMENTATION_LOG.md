@@ -9,6 +9,7 @@
 - Corrected paper bar acquisition to request the symbol identity as of each interval and normalize retained raw-adjustment bars to the exact `America/New_York` regular-session grid before receipt validation.
 - Corrected acquisition semantics discovered on APD: nonempty but incomplete monthly bars are retained with zero validated sessions for explicit exclusion accounting, while genuinely zero-row chunks remain failed receipts and do not count as complete.
 - Corrected empty post-termination provider frames discovered on TIF so they produce schema-valid, explicit zero-row failure receipts instead of failing normalization with a missing timestamp column.
+- Replaced the formation-universe all-corpus concatenation after a measured 6.63 GiB process footprint with a fail-closed, per-instrument monthly scan. The streaming calculation preserves the original price, completeness, and dollar-volume statistics while bounding peak corpus memory.
 - Recorded the initial merged-baseline result as `FAIL` (131 passed, 3 stale-freeze failures); the focused corrected gate is `PASS`. No historical model fit or test-model result was produced.
 
 ## Sparse predictive-representation paper framework — 2026-09-04

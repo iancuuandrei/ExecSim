@@ -15,7 +15,7 @@ from execsim.data.paper.corporate_action_manifest import (
     write_corporate_action_manifest,
 )
 from execsim.data.paper.formation import (
-    build_formation_candidates,
+    build_formation_candidates_from_corpus,
     ingest_constituent_snapshot,
     write_formation_receipts,
 )
@@ -37,14 +37,13 @@ def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
         if not path.exists():
             raise RuntimeError(f"BLOCKED: required formation input is unavailable: {path}")
     snapshot = ingest_constituent_snapshot(snapshot_path)
-    formation = _load_parquet_corpus(formation_root)
     import exchange_calendars as xcals
 
     calendar = xcals.get_calendar("XNYS")
     formation_start, formation_end = config.data["formation_period"]
     expected = len(calendar.sessions_in_range(formation_start, formation_end))
-    candidates, exclusions = build_formation_candidates(
-        snapshot, formation, expected_session_count=expected
+    candidates, exclusions = build_formation_candidates_from_corpus(
+        snapshot, formation_root, expected_session_count=expected
     )
     artifact_root = config.artifact_root / "formation"
     artifact_root.mkdir(parents=True, exist_ok=True)
