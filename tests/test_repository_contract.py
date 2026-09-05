@@ -54,3 +54,24 @@ def test_repository_context_check_and_selection_are_deterministic() -> None:
     assert first.returncode == 0, first.stderr
     assert first.stdout == second.stdout
     assert '"simulation"' in first.stdout
+
+
+def test_byte_exact_paper_artifacts_pin_lf_checkout_bytes() -> None:
+    """Keep frozen scientific hashes invariant under Windows Git settings."""
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    assert "configs/paper/**/*.json text eol=lf" in attributes
+    assert "data/manifests/paper_universe_v2.json text eol=lf" in attributes
+    assert "CORPUS_QUALITY_REPORT.md text eol=lf" in attributes
+    assert "V2_FORMATION_QUALITY_REPORT.md text eol=lf" in attributes
+
+    byte_exact_paths = (
+        "configs/paper/sparse_jepa/design-freeze-v1.json",
+        "configs/paper/sparse_jepa/safe-default-receipt-v1.json",
+        "configs/paper/sparse_jepa/v1-evidence-final.json",
+        "configs/paper/sparse_jepa_v2/design-freeze-v2.json",
+        "data/manifests/paper_universe_v2.json",
+        "CORPUS_QUALITY_REPORT.md",
+        "V2_FORMATION_QUALITY_REPORT.md",
+    )
+    for relative_path in byte_exact_paths:
+        assert b"\r" not in (ROOT / relative_path).read_bytes(), relative_path
