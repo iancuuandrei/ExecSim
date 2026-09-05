@@ -29,6 +29,8 @@ The complete 505-candidate table is rebuilt from the 2021-01-04 S&P 500 membersh
 
 The target period remains 2022-01-03 through 2025-12-31. SPY is an input instrument, never an execution-universe member, and uses the same resolution-specific rules. Target-period token or minute gaps exclude individual cases rather than frozen instruments. V2 must complete and hash the formation report, candidate data, token diagnostics, v1/v2 bias diagnostic, universe, and regenerated resource/acquisition plan, then stop at `AWAITING V2 FORMATION APPROVAL` before any target acquisition.
 
+The completed formation gate qualifies 497 of 505 candidates and freezes the declared top 100. The authoritative counts, member table, SPY audit, activity-bias diagnostic, and bounded resource evidence are in `V2_FORMATION_QUALITY_REPORT.md`. This formation result is data-quality evidence, not a model result.
+
 Every research row and artifact distinguishes three times:
 
 - `training_cutoff`: last date permitted to fit model parameters, transforms, categories, and selection decisions;

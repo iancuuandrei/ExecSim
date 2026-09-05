@@ -127,9 +127,7 @@ def load_paper_config(path: Path) -> PaperRunConfig:
         raise TypeError("Paper design freeze must contain a JSON object.")
     _validate_design_freeze(root, sections, freeze_path, freeze)
     _validate_sections(sections)
-    return PaperRunConfig(
-        root, sections, stable_hash({"sections": sections, "freeze": freeze}), freeze
-    )
+    return PaperRunConfig(root, sections, stable_hash({"sections": sections}), freeze)
 
 
 def _validate_design_freeze(

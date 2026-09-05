@@ -61,7 +61,7 @@ areas:
     tests: [tests/test_ml_infrastructure.py]
     verify: [python -m pytest tests/test_ml_infrastructure.py]
   paper_data:
-    roots: [src/execsim/data/paper, data/manifests]
+    roots: [src/execsim/data/paper, data/manifests, V2_FORMATION_QUALITY_REPORT.md]
     purpose: Frozen protocol evidence, v2 daily formation, licensed SIP acquisition, resolution-specific quality, corporate actions, partitions, and corpus receipts.
     specifications: [docs/standards/implementation.md, docs/PAPER_DESIGN.md, docs/DATA_LEAKAGE_CONTRACT.md, docs/ADRs/0008-redirect-paper-to-representation-accessibility.md, docs/ADRs/0009-separate-data-quality-by-resolution.md]
     tests: [tests/test_paper_data.py, tests/test_paper_resolution_quality.py]

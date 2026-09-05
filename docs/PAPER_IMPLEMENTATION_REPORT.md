@@ -11,8 +11,8 @@ cost, or economic value.
 | Evidence class | Status |
 |---|---|
 | Sparse-JEPA v1 formation protocol | **BLOCKED** - 62 of 505 eligible |
-| Sparse-JEPA v2 protocol and formation software | **IMPLEMENTATION IN PROGRESS** |
-| V2 formation daily corpus and frozen universe | **NOT RUN** |
+| Sparse-JEPA v2 protocol and formation software | **SOFTWARE READY** |
+| V2 formation daily corpus and frozen universe | **FORMATION COMPLETE - AWAITING APPROVAL** |
 | V2 target-period Alpaca SIP corpus | **DATA NOT ACQUIRED** |
 | Historical JEPA and LightGBM fits | **TRAINING NOT RUN** |
 | Locked-test representation, forecast, execution, and paper estimates | **EMPIRICAL RESULT NOT AVAILABLE** |
@@ -29,7 +29,7 @@ observed-only fixed 15-minute representation tokens, and exact 300-minute TCA
 windows. The unchanged 95% concept now measures valid expected daily sessions.
 No absent provider minute is interpreted as zero activity. The formation result,
 SPY 2021-05-05 token audit, v1/v2 bias diagnostic, resource evidence, and final
-v2 terminal status will be recorded after the authorized bounded formation run.
+v2 terminal status are recorded in `V2_FORMATION_QUALITY_REPORT.md`.
 
 ## Provider semantics gate
 
@@ -48,17 +48,16 @@ convention are recorded in `docs/RESEARCH_REFERENCES.md`.
 | Stage | Status |
 |---|---|
 | Official provider-semantics review | **PASS** |
-| V2 protocol documents and ADR 0009 | **IMPLEMENTED; FINAL FREEZE PENDING** |
-| Daily formation acquisition | **NOT RUN** |
-| Formation candidate rebuild and top-100 freeze | **NOT RUN** |
-| Formation token-quality and v1/v2 bias diagnostics | **NOT RUN** |
+| V2 protocol documents, ADR 0009, and final freeze | **PASS** |
+| Daily formation acquisition | **PASS** - 126,461 rows, 506 symbols |
+| Formation candidate rebuild and top-100 freeze | **PASS** - 497 eligible, 100 frozen |
+| Formation token-quality and v1/v2 bias diagnostics | **PASS** - 45,464,276 minute rows scanned |
 | Target acquisition | **NOT RUN** - prohibited before formation approval |
 | Historical model training | **NOT RUN** |
 | Locked test and historical TCA | **NOT RUN** |
 
-The next permitted terminal state after a successful >=100-name formation is
-`AWAITING V2 FORMATION APPROVAL`. Fewer than 100 names produces `BLOCKED —
-INSUFFICIENT DAILY-QUALITY FORMATION UNIVERSE`.
+The current terminal state is `AWAITING V2 FORMATION APPROVAL`. The next
+privileged action, target-period acquisition, requires new explicit approval.
 
 ## Inherited v1 software evidence
 

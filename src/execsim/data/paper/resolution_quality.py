@@ -126,6 +126,8 @@ def assess_session_resolution_quality(
             ),
         )
         return (quality, None) if return_tokens else quality
+    if not return_tokens:
+        return _assess_quality_only(bars, daily_valid=daily_valid)
 
     ordered = bars.sort_values("timestamp", kind="stable").reset_index(drop=True)
     timestamps = pd.to_datetime(ordered["timestamp"], errors="coerce")
@@ -193,6 +195,84 @@ def assess_session_resolution_quality(
         invalid_token_reason=";".join(token_reasons),
     )
     return (quality, tokens if token_valid else None) if return_tokens else quality
+
+
+def _assess_quality_only(bars: pd.DataFrame, *, daily_valid: bool) -> SessionResolutionQuality:
+    """Calculate quality identities without materializing token aggregates."""
+    ordered = bars.sort_values("timestamp", kind="stable").reset_index(drop=True)
+    timestamps = pd.to_datetime(ordered["timestamp"], errors="coerce")
+    reasons: list[str] = []
+    if timestamps.isna().any() or timestamps.dt.tz is None:
+        return _invalid_quality(ordered, daily_valid, ["invalid_or_naive_timestamp"])
+    if str(timestamps.dt.tz) != "America/New_York":
+        reasons.append("wrong_timezone")
+    if timestamps.duplicated().any():
+        reasons.append("duplicate_timestamp")
+    original = pd.DatetimeIndex(pd.to_datetime(bars["timestamp"]))
+    if not original.is_monotonic_increasing:
+        reasons.append("reordered_timestamp")
+    local_dates = timestamps.dt.tz_convert("America/New_York").dt.date.unique()
+    if len(local_dates) != 1:
+        return _invalid_quality(ordered, daily_valid, [*reasons, "multiple_session_dates"])
+    if ordered["instrument_id"].nunique(dropna=False) != 1:
+        reasons.append("multiple_instruments")
+    if ordered["symbol"].nunique(dropna=False) != 1:
+        reasons.append("multiple_symbols")
+    reasons.extend(_observed_numeric_errors(ordered))
+
+    session_date = local_dates[0]
+    expected = expected_xnys_minutes(session_date)
+    early_close = len(expected) != 390
+    actual = pd.DatetimeIndex(timestamps)
+    actual_ns = actual.as_unit("ns").asi8
+    expected_ns = expected.as_unit("ns").asi8
+    on_grid = np.isin(actual_ns, expected_ns, assume_unique=False)
+    off_grid_count = int((~on_grid).sum())
+    if off_grid_count:
+        reasons.append(f"off_grid_minutes:{off_grid_count}")
+    minute_exact = not reasons and np.array_equal(actual_ns, expected_ns)
+    provider_gap_count = int((~np.isin(expected_ns, actual_ns, assume_unique=False)).sum())
+
+    token_reasons = list(reasons)
+    valid_token_count = 0
+    if early_close:
+        token_reasons.append("early_close_not_primary_26_token_session")
+    elif not reasons:
+        offsets = actual.hour * 60 + actual.minute - (9 * 60 + 30)
+        buckets = np.asarray(offsets // TOKEN_MINUTES, dtype=int)
+        counts = np.bincount(buckets, minlength=TOKEN_COUNT)
+        volume = pd.to_numeric(ordered["volume"]).to_numpy(dtype=float)
+        volume_sums = np.bincount(buckets, weights=volume, minlength=TOKEN_COUNT)
+        valid = (counts[:TOKEN_COUNT] >= MINIMUM_OBSERVED_BARS_PER_TOKEN) & (
+            volume_sums[:TOKEN_COUNT] > 0
+        )
+        valid_token_count = int(valid.sum())
+        for bucket_id in np.flatnonzero(counts[:TOKEN_COUNT] < MINIMUM_OBSERVED_BARS_PER_TOKEN):
+            token_reasons.append(f"token_{bucket_id:02d}_observed_bars_lt_2")
+        for bucket_id in np.flatnonzero(
+            (counts[:TOKEN_COUNT] >= MINIMUM_OBSERVED_BARS_PER_TOKEN)
+            & (volume_sums[:TOKEN_COUNT] <= 0)
+        ):
+            token_reasons.append(f"token_{bucket_id:02d}_nonpositive_volume")
+    tca_start = pd.Timestamp.combine(session_date, TCA_START).tz_localize("America/New_York")
+    tca_expected_ns = pd.date_range(tca_start, periods=300, freq="min").as_unit("ns").asi8
+    tca_mask = (actual.time >= TCA_START) & (actual.time < TCA_END)
+    tca_exact = not reasons and np.array_equal(actual_ns[tca_mask], tca_expected_ns)
+    token_valid = not token_reasons and valid_token_count == TOKEN_COUNT
+    return SessionResolutionQuality(
+        instrument_id=str(ordered["instrument_id"].iloc[0]),
+        symbol=str(ordered["symbol"].iloc[0]).upper(),
+        session_date=session_date.isoformat(),
+        daily_valid=daily_valid,
+        minute_exact_full_session=minute_exact,
+        token_valid_full_session=token_valid,
+        tca_window_exact=tca_exact,
+        early_close=early_close,
+        provider_gap_count=provider_gap_count,
+        observed_minute_count=len(ordered),
+        valid_token_count=valid_token_count,
+        invalid_token_reason=";".join(token_reasons),
+    )
 
 
 def _aggregate_standard_session(

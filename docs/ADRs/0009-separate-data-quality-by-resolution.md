@@ -21,7 +21,9 @@ Alpaca documents that stock minute and daily bars are independently aggregated f
 - V1 median exact-session completeness: 12.749% after excluding the predeclared early close from the 251-session denominator.
 - SPY 2021-05-05: 385 observed minute aggregates and therefore not exact at the full-session minute resolution. V2 separately determines whether all 26 model tokens remain computable.
 - Provider evidence: the Alpaca Market Data FAQ defines emission and aggregation rules and explicitly distinguishes minute from daily condition handling. The provider semantics and source links are recorded in `docs/RESEARCH_REFERENCES.md`.
-- Selection-bias evidence: the v1-versus-v2 activity correlations remain `NOT RUN` until the bounded formation token-quality scan completes. They are diagnostic and cannot change this decision or tune the 95% daily threshold.
+- V2 daily evidence: 497 of 505 candidates satisfy the unchanged 95% daily criterion; exactly 100 are frozen by the predeclared liquidity rank. Of those 100, 99 have high token completeness, one has medium completeness, and none has low completeness under the pre-count 95%/80% bands.
+- SPY 2021-05-05 is token-valid with all 26 tokens despite five absent minute aggregates; it remains non-exact for the full session and the 10:30-15:29 TCA window.
+- Selection-bias evidence: across all 505 candidates, v1 eligibility has Pearson/Spearman correlations of 0.557/0.488 with log median daily dollar volume and 0.222/0.497 with average observed minute count. V1 exact-minute completeness has Pearson/Spearman correlations of 0.592/0.575 with log liquidity and 0.487/0.957 with average minute count. The activity association is material, diagnostic only, and did not tune v2.
 
 ## Decision
 
@@ -66,7 +68,7 @@ V2 is a new protocol version with distinct configuration, freeze, candidate, uni
 
 The JEPA/forecast sample can be larger than the exact-minute TCA complete-case subset. Reports and manifests must never collapse these populations into one `complete` flag. Early closes may be valid daily observations but remain excluded from the primary 26-token representation sample. Formation ranking is known only after 2021-12-31.
 
-The v2 formation scan may retrieve daily formation bars under its separate network authorization, but it must stop before target acquisition. Historical model training, test inspection, and historical TCA remain `NOT RUN`. If daily formation produces at least 100 eligible names, the next terminal state is `AWAITING V2 FORMATION APPROVAL`; otherwise it is `BLOCKED — INSUFFICIENT DAILY-QUALITY FORMATION UNIVERSE`.
+The authorized v2 formation scan retrieved 126,461 direct daily rows for all 505 candidates plus SPY and verified the existing 45,464,276-row minute corpus at token resolution. It stopped before target acquisition. Historical model training, test inspection, and historical TCA remain `NOT RUN`. Because 497 names qualify, the terminal state is `AWAITING V2 FORMATION APPROVAL`.
 
 ## Verification
 

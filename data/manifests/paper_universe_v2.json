@@ -1007,7 +1007,7 @@
       "rank": 100
     }
   ],
-  "paper_config_hash": "1ad2c6216a22d2c546309f6a1e8238e30bbe23e1fec4e6c5d79a7854156434e8",
+  "paper_config_hash": "e0a926869b8882ff3a3f031bda046786ccaf9194ad9a6f1e4a5b7c9846609ed1",
   "protocol_id": "sparse-jepa-v2",
   "ranking_available_after": "2021-12-31",
   "schema_version": "paper-universe-v2",
@@ -1735,5 +1735,5 @@
     }
   ],
   "target_size": 100,
-  "universe_id": "universe-v2-31627465929b0ea9"
+  "universe_id": "universe-v2-5f8f977dcf2b866e"
 }

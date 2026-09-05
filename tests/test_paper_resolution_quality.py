@@ -7,11 +7,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from execsim.data.paper.formation_quality_v2 import scan_formation_resolution_quality
+from execsim.data.paper.formation_report_v2 import write_v2_formation_bundle
 from execsim.data.paper.formation_v2 import (
     build_daily_formation_candidates,
     select_v2_universe,
 )
-from execsim.data.paper.manifests import file_sha256
+from execsim.data.paper.manifests import file_sha256, write_json_atomic
 from execsim.data.paper.resolution_quality import (
     aggregate_observed_tokens,
     assess_session_resolution_quality,
@@ -71,6 +73,22 @@ def test_exact_and_sparse_minute_sessions_have_separate_quality() -> None:
     assert not sparse_quality.tca_window_exact
     assert sparse_quality.provider_gap_count == 5
     assert sparse_quality.valid_token_count == 26
+
+
+@pytest.mark.parametrize(
+    "bars",
+    [
+        _minute_session(),
+        _minute_session().drop(index=[1, 18, 80, 200, 388]).reset_index(drop=True),
+        _minute_session().drop(index=range(30, 45)).reset_index(drop=True),
+        _minute_session().drop(index=[61]).reset_index(drop=True),
+    ],
+)
+def test_quality_only_scan_matches_materialized_token_validation(bars: pd.DataFrame) -> None:
+    quality_only = assess_session_resolution_quality(bars)
+    materialized, _ = assess_session_resolution_quality(bars, return_tokens=True)
+
+    assert quality_only.to_dict() == materialized.to_dict()
 
 
 def test_token_aggregation_uses_observations_without_fake_minute_rows() -> None:
@@ -239,3 +257,197 @@ def test_v1_terminal_evidence_is_immutable_and_v2_paths_are_distinct() -> None:
     assert v1.artifact_root != v2.artifact_root
     assert v1.data["universe_manifest"] != v2.data["universe_manifest"]
     assert v1.data["target_corpus_root"] != v2.data["target_corpus_root"]
+
+
+def test_resolution_quality_manifest_keeps_daily_token_and_minute_fields(
+    tmp_path: Path,
+) -> None:
+    session_dates = (pd.Timestamp("2021-05-05"), pd.Timestamp("2021-05-06"))
+    corpus = tmp_path / "minute"
+    corpus.mkdir()
+    stock = pd.concat(
+        [
+            _minute_session().assign(
+                timestamp=pd.date_range(day, periods=390, freq="min", tz="America/New_York")
+            )
+            for day in ("2021-05-05 09:30", "2021-05-06 09:30")
+        ],
+        ignore_index=True,
+    ).drop(index=[1])
+    spy = stock.assign(instrument_id="benchmark-spy", symbol="SPY")
+    for instrument_id, symbol, frame in (
+        ("id-aapl", "AAPL", stock),
+        ("benchmark-spy", "SPY", spy),
+    ):
+        receipt_path = corpus / f"{instrument_id}.json"
+        response_path = receipt_path.with_suffix(".response")
+        frame.to_parquet(response_path, index=False)
+        write_json_atomic(
+            receipt_path,
+            {
+                "status": "complete",
+                "instrument_id": instrument_id,
+                "symbol": symbol,
+                "feed": "sip",
+                "adjustment": "raw",
+                "response_sha256": file_sha256(response_path),
+            },
+        )
+    daily = pd.concat(
+        [
+            _daily_frame(2),
+            _daily_frame(2, instrument_id="benchmark-spy").assign(symbol="SPY"),
+        ],
+        ignore_index=True,
+    )
+    daily["timestamp"] = pd.to_datetime(
+        [
+            "2021-05-05 00:00-04:00",
+            "2021-05-06 00:00-04:00",
+            "2021-05-05 00:00-04:00",
+            "2021-05-06 00:00-04:00",
+        ]
+    )
+    quality_path = tmp_path / "quality.parquet"
+    receipt = scan_formation_resolution_quality(
+        pd.DataFrame({"instrument_id": ["id-aapl"], "symbol": ["AAPL"]}),
+        daily,
+        corpus_root=corpus,
+        expected_sessions=session_dates,
+        spy_instrument_id="benchmark-spy",
+        output_path=quality_path,
+        receipt_path=tmp_path / "quality.json",
+        protocol_hash="a" * 64,
+    )
+    quality = pd.read_parquet(quality_path)
+
+    assert receipt["quality_rows"] == 4
+    assert {
+        "daily_valid",
+        "minute_exact_full_session",
+        "token_valid_full_session",
+        "tca_window_exact",
+    }.issubset(quality.columns)
+    stock_first = quality.loc[
+        (quality["instrument_id"] == "id-aapl") & (quality["session_date"] == "2021-05-05")
+    ].iloc[0]
+    assert bool(stock_first["daily_valid"])
+    assert not bool(stock_first["minute_exact_full_session"])
+    assert bool(stock_first["token_valid_full_session"])
+    assert bool(stock_first["tca_window_exact"])
+
+
+def test_v2_formation_report_uses_named_quality_and_stops_before_target(
+    tmp_path: Path,
+) -> None:
+    ids = [f"id-{index:03d}" for index in range(505)]
+    v1 = pd.DataFrame(
+        {
+            "instrument_id": ids,
+            "symbol": [f"S{index:03d}" for index in range(505)],
+            "session_completeness": np.linspace(0.5, 1.0, 505),
+        }
+    )
+    v2 = pd.DataFrame(
+        {
+            "instrument_id": ids,
+            "formation_symbol": [f"S{index:03d}" for index in range(505)],
+            "in_sp500_on_formation_date": True,
+            "security_type": "ordinary_common_stock",
+            "expected_daily_sessions": 2,
+            "observed_valid_daily_sessions": 2,
+            "daily_completeness": 1.0,
+            "median_daily_price": 10.0,
+            "median_daily_share_volume": 1_000.0,
+            "median_daily_dollar_volume": np.arange(505, 0, -1, dtype=float),
+            "first_valid_formation_date": "2021-05-05",
+            "last_valid_formation_date": "2021-05-06",
+            "identity_source_hash": "a" * 64,
+            "formation_data_hash": "b" * 64,
+            "exclusion_reasons": "[]",
+        }
+    )
+    quality_rows = []
+    for instrument_index, instrument_id in enumerate([*ids, "benchmark-spy"]):
+        for session_index, session_date in enumerate(("2021-05-05", "2021-05-06")):
+            token_valid = instrument_index < 100 or session_index == 0
+            observed_minutes = max(2, 390 - instrument_index % 100)
+            quality_rows.append(
+                {
+                    "instrument_id": instrument_id,
+                    "symbol": "SPY" if instrument_id == "benchmark-spy" else instrument_id,
+                    "session_date": session_date,
+                    "daily_valid": True,
+                    "minute_exact_full_session": True,
+                    "token_valid_full_session": token_valid,
+                    "tca_window_exact": True,
+                    "early_close": False,
+                    "provider_gap_count": 0,
+                    "observed_minute_count": observed_minutes,
+                    "valid_token_count": 26 if token_valid else 25,
+                    "invalid_token_reason": "" if token_valid else "token_00_observed_bars_lt_2",
+                }
+            )
+    paths = {
+        "v1": tmp_path / "v1.parquet",
+        "v2": tmp_path / "v2.parquet",
+        "quality": tmp_path / "quality.parquet",
+        "universe": tmp_path / "universe.json",
+        "ticker": tmp_path / "ticker.parquet",
+        "daily_receipt": tmp_path / "daily.json",
+        "quality_receipt": tmp_path / "quality.json",
+    }
+    v1.to_parquet(paths["v1"], index=False)
+    v2.to_parquet(paths["v2"], index=False)
+    pd.DataFrame(quality_rows).to_parquet(paths["quality"], index=False)
+    members = [
+        {"rank": index + 1, "instrument_id": ids[index], "liquidity_group": 1}
+        for index in range(100)
+    ]
+    write_json_atomic(
+        paths["universe"],
+        {"protocol_id": "sparse-jepa-v2", "members": members},
+    )
+    pd.DataFrame(
+        {
+            "instrument_id": [*[item["instrument_id"] for item in members], "benchmark-spy"],
+            "symbol": [*[f"S{index:03d}" for index in range(100)], "SPY"],
+            "start": "2021-01-04",
+            "end": "2025-12-31",
+        }
+    ).to_parquet(paths["ticker"], index=False)
+    write_json_atomic(
+        paths["daily_receipt"],
+        {"rows": 1_012, "symbols_observed": 506, "content_sha256": "c" * 64},
+    )
+    write_json_atomic(
+        paths["quality_receipt"],
+        {
+            "observed_minute_rows": 1_012 * 390,
+            "elapsed_seconds": 1.0,
+            "minute_rows_per_second": 1_000.0,
+            "token_aggregation_attempts_per_second": 100.0,
+            "peak_rss_bytes": 1_000,
+            "source_response_bytes": 2_000,
+            "quality_parquet_bytes": paths["quality"].stat().st_size,
+        },
+    )
+    report = tmp_path / "V2_FORMATION_QUALITY_REPORT.md"
+    result = write_v2_formation_bundle(
+        v1_candidates_path=paths["v1"],
+        v2_candidates_path=paths["v2"],
+        quality_path=paths["quality"],
+        universe_path=paths["universe"],
+        ticker_history_path=paths["ticker"],
+        daily_receipt_path=paths["daily_receipt"],
+        quality_receipt_path=paths["quality_receipt"],
+        output_directory=tmp_path / "output",
+        report_path=report,
+        protocol_hash="d" * 64,
+    )
+
+    assert result["candidate_count"] == 505
+    assert result["selected_token_band_counts"] == {"high": 100, "medium": 0, "low": 0}
+    assert result["target_data_status"] == "NOT RUN"
+    assert result["terminal_status"] == "AWAITING V2 FORMATION APPROVAL"
+    assert "AWAITING V2 FORMATION APPROVAL" in report.read_text(encoding="utf-8")

@@ -12,6 +12,7 @@ ExecSim uses a small manifest-backed navigation system rather than Nx. The repos
 - ML design and future training procedure: `docs/ML_DESIGN.md`
 - Sparse-JEPA paper contracts and locked experiment: `docs/PAPER_DESIGN.md`
 - Sparse-JEPA implementation evidence and gate classification: `docs/PAPER_IMPLEMENTATION_REPORT.md`
+- Sparse-JEPA v2 formation evidence and approval gate: `V2_FORMATION_QUALITY_REPORT.md`
 - Provider and research-method sources: `docs/RESEARCH_REFERENCES.md`
 - Component ownership and validation: `repo_manifest.yaml`
 - Project goals and non-goals: `docs/PROJECT_CONTEXT.md`
