@@ -1847,14 +1847,23 @@ def _acquire_period(
             for chunk in monthly_chunks(
                 instrument_id, interval.symbol, interval_start, interval_end
             ):
-                acquire_chunk(
-                    chunk,
-                    output_directory=output,
-                    fetch=fetcher,
-                    config=data,
-                    cli_enabled=True,
-                )
-                completed += 1
+                try:
+                    acquire_chunk(
+                        chunk,
+                        output_directory=output,
+                        fetch=fetcher,
+                        config=data,
+                        cli_enabled=True,
+                    )
+                    completed += 1
+                except RuntimeError as exc:
+                    causes = []
+                    current: BaseException | None = exc
+                    while current is not None:
+                        causes.append(str(current))
+                        current = current.__cause__
+                    if not any("row count is zero" in message for message in causes):
+                        raise
     return completed
 
 

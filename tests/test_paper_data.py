@@ -156,6 +156,39 @@ def test_zero_row_acquisition_fails_and_sourced_ticker_history_resolves_identity
         resolve_provider_symbol(intervals, "asset-2", date(2024, 2, 1))
 
 
+def test_nonempty_incomplete_chunk_is_retained_for_exclusion_accounting(tmp_path: Path) -> None:
+    chunk = monthly_chunks("asset-1", "APD", date(2024, 1, 1), date(2024, 1, 31))[0]
+    timestamps = pd.date_range("2024-01-03 09:30", periods=389, freq="min", tz="America/New_York")
+    frame = pd.DataFrame(
+        {
+            "instrument_id": "asset-1",
+            "symbol": "APD",
+            "timestamp": timestamps,
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.0,
+            "close": 100.0,
+            "volume": 1_000,
+            "trade_count": 10,
+            "vwap": 100.0,
+        }
+    )
+    buffer = BytesIO()
+    frame.to_parquet(buffer, index=False)
+    receipt = acquire_chunk(
+        chunk,
+        output_directory=tmp_path,
+        fetch=lambda _: ProviderResponse(buffer.getvalue(), len(frame)),
+        config=PaperDataConfig(allow_network=True),
+        cli_enabled=True,
+        max_attempts=1,
+    )
+
+    assert receipt.status == "complete"
+    assert receipt.observed_sessions == 0
+    assert receipt.expected_sessions > 0
+
+
 def test_acquisition_period_uses_sourced_partial_aliases_and_blocks_trading_day_gaps(
     tmp_path,
 ) -> None:
@@ -197,6 +230,36 @@ def test_acquisition_period_uses_sourced_partial_aliases_and_blocks_trading_day_
             acquire_chunk=record,
             monthly_chunks=monthly_chunks,
         )
+
+
+def test_acquisition_period_records_zero_row_month_without_claiming_completion(
+    tmp_path: Path,
+) -> None:
+    intervals = (
+        InstrumentSymbolInterval("asset-1", "OLD", date(2024, 1, 1), date(2024, 2, 29), "src"),
+    )
+    attempted = []
+
+    def record(chunk, **_):
+        attempted.append(chunk)
+        if chunk.start.month == 1:
+            cause = ValueError("Provider response row count is zero or does not match metadata.")
+            raise RuntimeError("Acquisition failed") from cause
+
+    completed = _acquire_period(
+        ("asset-1",),
+        intervals,
+        start=date(2024, 1, 1),
+        end=date(2024, 2, 29),
+        output=tmp_path,
+        fetcher=object(),
+        data=PaperDataConfig(allow_network=True),
+        acquire_chunk=record,
+        monthly_chunks=monthly_chunks,
+    )
+
+    assert completed == 1
+    assert [item.start.month for item in attempted] == [1, 2]
 
 
 def test_universe_is_frozen_by_formation_liquidity_with_stable_ties() -> None:

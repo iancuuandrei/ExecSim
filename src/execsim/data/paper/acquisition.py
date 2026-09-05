@@ -359,6 +359,6 @@ def _validate_provider_response(
             observed += 1
     calendar = __import__("exchange_calendars").get_calendar("XNYS")
     expected_sessions = len(calendar.sessions_in_range(chunk.start, chunk.end))
-    if expected_sessions <= 0 or observed <= 0:
-        raise ValueError("Provider response has no validated regular-session coverage.")
+    if expected_sessions <= 0:
+        raise ValueError("Provider response has no expected XNYS session coverage metadata.")
     return observed, expected_sessions

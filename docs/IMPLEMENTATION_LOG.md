@@ -7,6 +7,7 @@
 - Enabled only the separately authorized network stage. Historical training and full evaluation remain disabled.
 - Added a pinned, checksummed formation-constituent source, deterministic stable share-class identities, sourced ticker intervals, a pre-request storage/request plan, and a paginated Alpaca SIP entitlement probe.
 - Corrected paper bar acquisition to request the symbol identity as of each interval and normalize retained raw-adjustment bars to the exact `America/New_York` regular-session grid before receipt validation.
+- Corrected acquisition semantics discovered on APD: nonempty but incomplete monthly bars are retained with zero validated sessions for explicit exclusion accounting, while genuinely zero-row chunks remain failed receipts and do not count as complete.
 - Recorded the initial merged-baseline result as `FAIL` (131 passed, 3 stale-freeze failures); the focused corrected gate is `PASS`. No historical model fit or test-model result was produced.
 
 ## Sparse predictive-representation paper framework — 2026-09-04
