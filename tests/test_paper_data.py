@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from execsim.data.paper.acquisition import acquire_chunk, authorize_acquisition, monthly_chunks
+from execsim.data.paper.acquisition import (
+    _normalize_alpaca_frame,
+    acquire_chunk,
+    authorize_acquisition,
+    monthly_chunks,
+)
 from execsim.data.paper.corporate_actions import (
     apply_point_in_time_split_adjustment,
     point_in_time_split_factor,
@@ -187,6 +192,16 @@ def test_nonempty_incomplete_chunk_is_retained_for_exclusion_accounting(tmp_path
     assert receipt.status == "complete"
     assert receipt.observed_sessions == 0
     assert receipt.expected_sessions > 0
+
+
+def test_empty_delisted_symbol_response_normalizes_to_explicit_zero_row_schema() -> None:
+    chunk = monthly_chunks("asset-1", "TIF", date(2021, 2, 1), date(2021, 2, 28))[0]
+    normalized = _normalize_alpaca_frame(pd.DataFrame(), chunk)
+
+    assert normalized.empty
+    assert {"instrument_id", "symbol", "timestamp", "trade_count", "vwap"}.issubset(
+        normalized.columns
+    )
 
 
 def test_acquisition_period_uses_sourced_partial_aliases_and_blocks_trading_day_gaps(

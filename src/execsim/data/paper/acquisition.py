@@ -19,6 +19,7 @@ import pandas as pd
 
 from execsim.data.paper.manifests import write_json_atomic
 from execsim.data.paper.schemas import (
+    PAPER_BAR_COLUMNS,
     AcquisitionChunk,
     AcquisitionReceipt,
     PaperDataConfig,
@@ -60,22 +61,30 @@ def create_alpaca_sip_fetcher() -> ChunkFetcher:
             asof=chunk.end.isoformat(),
         )
         response = cast(Any, client.get_stock_bars(request))
-        frame = response.df.reset_index()
+        frame = _normalize_alpaca_frame(response.df.reset_index(), chunk)
+        buffer = BytesIO()
+        frame.to_parquet(buffer, index=False)
+        return ProviderResponse(buffer.getvalue(), len(frame))
+
+    return fetch
+
+
+def _normalize_alpaca_frame(frame: pd.DataFrame, chunk: AcquisitionChunk) -> pd.DataFrame:
+    """Normalize SDK output, including empty delisted-symbol responses, into corpus schema."""
+    if frame.empty:
+        normalized = pd.DataFrame(columns=PAPER_BAR_COLUMNS)
+    else:
         timestamps = pd.to_datetime(frame["timestamp"], errors="raise", utc=True).dt.tz_convert(
             "America/New_York"
         )
         regular = (timestamps.dt.time >= datetime.strptime("09:30", "%H:%M").time()) & (
             timestamps.dt.time <= datetime.strptime("15:59", "%H:%M").time()
         )
-        frame = frame.loc[regular].copy()
-        frame["timestamp"] = timestamps.loc[regular]
-        frame["instrument_id"] = chunk.instrument_id
-        frame["symbol"] = chunk.symbol
-        buffer = BytesIO()
-        frame.to_parquet(buffer, index=False)
-        return ProviderResponse(buffer.getvalue(), len(frame))
-
-    return fetch
+        normalized = frame.loc[regular].copy()
+        normalized["timestamp"] = timestamps.loc[regular]
+    normalized["instrument_id"] = chunk.instrument_id
+    normalized["symbol"] = chunk.symbol
+    return normalized
 
 
 def monthly_chunks(
