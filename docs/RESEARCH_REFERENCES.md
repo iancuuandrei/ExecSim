@@ -11,7 +11,11 @@ These sources motivate non-obvious model and implementation choices. ExecSim doc
 
 - Bank for International Settlements. [Execution algorithms and market functioning](https://www.bis.org/publ/mktc13.pdf). This provides institutional context for schedule-based execution algorithms and volume-oriented benchmarks.
 - Alpaca. [Historical stock data documentation](https://docs.alpaca.markets/docs/historical-stock-data-1). ExecSim stores normalized vendor output locally and keeps simulation vendor-independent.
+- Alpaca. [Market Data FAQ: stock feeds and bar aggregation](https://docs.alpaca.markets/us/docs/market-data-faq). Minute and daily bars are trade aggregates with bar-type-specific condition rules. Alpaca emits a stock bar only when all OHLCV fields are nonzero; an absent minute therefore does not establish zero market activity. Non-minute/non-daily intervals use first open, extrema, last close, summed volume and trade count, and volume-weighted VWAP over observed source bars.
+- Alpaca. [Historical stock bars API](https://docs.alpaca.markets/us/v1.4.2/reference/stockbars). V2 formation requests direct `1Day`, SIP, raw-adjustment observations and records request dates, feed, adjustment, stable identity, pagination, response schema, and content checksum.
+- Alpaca. [Real-time stock data bar schema](https://docs.alpaca.markets/us/docs/real-time-stock-pricing-data). The schema identifies OHLC, volume, VWAP, trade count, timestamp, and late updated bars. The paper uses final historical responses and records provider vintage; it does not treat a streaming first emission as final history.
 - pandas. [Time series and date functionality](https://pandas.pydata.org/docs/user_guide/timeseries.html). ExecSim requires timezone-aware timestamps at simulation and dataset boundaries.
+- Andersen, Bollerslev, Diebold, and Labys. [The distribution of realized exchange rate volatility](https://www.nber.org/papers/w6961). Realized variation is based on sums of squared intraperiod log returns. V2 uses that construction only on consecutive observed closes within a token, explicitly retaining gap-spanning returns and making no equal-spacing or interpolation claim.
 
 ## Numerical and ML infrastructure
 

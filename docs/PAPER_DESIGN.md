@@ -1,6 +1,6 @@
 # Predictive representation accessibility paper specification
 
-This document is the normative protocol for PR #2. It defines software and future historical experiments; it reports no empirical result. Licensed acquisition, historical fitting, evaluation, and TCA remain separately authorized operations and are `NOT RUN`.
+This document is the normative protocol for `sparse-jepa-v2`. It defines software and future historical experiments; it reports no empirical result. V1 remains immutably blocked with 62 eligible names under its exact-minute formation rule. V2 amends only task-resolution data quality. Target acquisition, historical fitting, evaluation, and TCA remain separately authorized operations and are `NOT RUN`.
 
 ## Research hierarchy and boundary
 
@@ -23,7 +23,13 @@ Learned components cannot choose a trade, relax a constraint, observe an actual 
 
 ## Data, folds, and time identities
 
-The provider contract remains Alpaca SIP, one-minute raw bars, `America/New_York`, regular hours only. The formation period is 2021-01-04 through 2021-12-31. It freezes 100 eligible S&P 500 ordinary common stocks by median daily dollar volume with stable instrument ID as tie-break. The target period is 2022-01-03 through 2025-12-31. SPY is acquired as an input instrument and is never an execution-universe member. Sourced ticker histories are mandatory; aliases are never inferred.
+The provider contract remains Alpaca SIP with raw adjustment and `America/New_York` time. The formation period is 2021-01-04 through 2021-12-31. V2 retrieves provider-native `1Day` bars and requires a valid daily observation on at least 95% of expected XNYS trading days. A daily row must have the expected instrument and local session date, one unique observation, finite OHLCV, trade count, and VWAP, positive OHLC and VWAP, nonnegative volume and trade count, `high >= max(open, close, low)`, and `low <= min(open, close, high)`. Early closes are ordinary expected daily sessions and are not failures when their daily observation is valid.
+
+The complete 505-candidate table is rebuilt from the 2021-01-04 S&P 500 membership source; it is not derived by changing v1 output. Eligibility applies to the source's S&P 500 share-class rows. The compatibility field `security_type=ordinary_common_stock` is a protocol label and is not an independently sourced legal-security classification. Stable sourced instrument identity, a median daily price floor of $5, positive median daily dollar volume, and stable-ID tie-breaking remain unchanged. If at least 100 names qualify, v2 freezes exactly the top 100 by formation-period median daily dollar volume. The ranking is available only after the formation interval and no later delisting, rename, merger, or data gap triggers survivor replacement. Sourced ticker histories are mandatory and aliases are never inferred.
+
+The target period remains 2022-01-03 through 2025-12-31. SPY is an input instrument, never an execution-universe member, and uses the same resolution-specific rules. Target-period token or minute gaps exclude individual cases rather than frozen instruments. V2 must complete and hash the formation report, candidate data, token diagnostics, v1/v2 bias diagnostic, universe, and regenerated resource/acquisition plan, then stop at `AWAITING V2 FORMATION APPROVAL` before any target acquisition.
+
+The completed formation gate qualifies 497 of 505 candidates and freezes the declared top 100. The authoritative counts, member table, SPY audit, activity-bias diagnostic, and bounded resource evidence are in `V2_FORMATION_QUALITY_REPORT.md`. This formation result is data-quality evidence, not a model result.
 
 Every research row and artifact distinguishes three times:
 
@@ -43,9 +49,23 @@ The locked folds are:
 
 Membership is derived from `(fold_id, session_date)` and fails closed. Artifact identity uses `(fold_id, instrument_id, session_date)` because expanding folds legitimately reuse earlier dates.
 
-## Session and feature contract
+## Resolution-specific session and feature contract
 
-Only exact XNYS 09:30 through 15:59 sessions enter the primary 26-token corpus. Validation requires one instrument and date, timezone identity, every expected minute exactly once and in order, finite OHLCV, trade count, and VWAP, positive prices, nonnegative counts and volume, and valid OHLC inequalities. Early closes are excluded. Validation precedes positional 15-minute aggregation.
+V2 preserves four independent quality identities for each instrument-session: daily observation quality, exact full-session minute quality, 15-minute-token representation quality, and exact TCA-window minute quality. The manifest fields are `daily_valid`, `minute_exact_full_session`, `token_valid_full_session`, `tca_window_exact`, `early_close`, `provider_gap_count`, `observed_minute_count`, `valid_token_count`, `invalid_token_reason`, `token_observed_bar_counts`, and `token_provider_gap_counts`. No downstream stage may infer one identity from another.
+
+Primary representation sessions are standard XNYS sessions partitioned into 26 fixed local-time intervals: 09:30-09:44, 09:45-09:59, through 15:45-15:59. V2 aggregates only observed provider minute bars in each interval and never inserts, interpolates, or zero-fills a missing bar. Each token requires at least two chronological rows with valid finite raw fields. Open is the first observed open; high and low are extrema; close is the last observed close; volume and trade count are sums; and VWAP is the observed-volume-weighted mean. Realized volatility is
+
+```text
+sqrt(sum((log(close_i) - log(close_(i-1)))^2 for consecutive observed closes))
+```
+
+This is an observed-grid realized-variation convention: a return across an absent provider minute is retained as one gap-spanning return and is not represented as a regular one-minute return or elapsed-time normalized. The previous valid token close supplies the cross-token return. All 26 tokens and every required cross-token input must be valid. Early closes remain outside the primary 26-token experiment. A 385-row session can therefore be representation-valid even though it is not exact at minute resolution.
+
+The corpus-wide builder must apply `resolution-aware-v2` to target validation, stock sessions, SPY sessions, and every causal seasonal-history aggregation. Sequence records persist the protocol, total provider-gap count, and all 26 observed-bar counts. The record symbol is the unique symbol observed for that instrument-session and must match the sourced ticker interval for the same stable instrument and date; the formation symbol is never reused as an unconditional target-period label.
+
+Formation-year token completeness uses the 251 predeclared standard-session denominator. Before the token scan, the diagnostic bands are frozen as high at least 95%, medium at least 80% but below 95%, and low below 80%. These labels describe data availability only and cannot select the universe or tune a model.
+
+Full-session minute exactness independently requires every expected XNYS regular-session timestamp exactly once, in order, with one instrument/date, exact timezone, finite schema values, positive prices, nonnegative counts and volume, and the OHLC inequalities. The primary TCA contract applies the same strict rule only to the simulator's consumed interval: start-inclusive 10:30 through end-exclusive 15:30, or exactly 300 timestamps ending at 15:29. TCA never imputes prices, capacity, or fills. Consequently, the representation sample may be larger than the TCA complete-case sample.
 
 The stored token tensor retains these 18 causal observations:
 
@@ -147,7 +167,7 @@ Intersect exact case IDs before comparison, including fold, date, instrument, as
 
 Use a fold-stratified five-trading-day moving-block bootstrap with 10,000 repetitions and 95% intervals. Each fold retains its intended date contribution and blocks never cross folds. One- and ten-day blocks are sensitivity analyses. If formal confirmatory claims are made, apply Holm correction to five predeclared contrasts. No arbitrary binary success threshold applies.
 
-`configs/paper/sparse_jepa/design-freeze-v1.json` stores frozen protocol choices. After common-RDM and per-fold LightGBM validation selection, `parameter-freeze-v1.json` records the selected values, Git commit, config hash, timestamp, and checksummed upstream manifests before any locked-test stage can run. Schemas retain dormant `encoder_capacity`, `predictor_capacity`, `latent_dimension`, `target_sparsity`, `training_data_scale`, and `market_complexity_stratum` fields for future work without varying them now.
+`configs/paper/sparse_jepa/design-freeze-v1.json` preserves its original bytes. The separately named `safe-default-receipt-v1.json` and terminal evidence preserve the later implementation and blocked acquisition state without requiring Git history at load time. `configs/paper/sparse_jepa_v2/design-freeze-v2.json` stores the v2 choices and binds the six v2 YAML files, normative documents, and unchanged scientific matrix. Git-tracked normative text is hashed after canonical LF normalization so identical committed content has one protocol identity on Windows and Linux; design freezes, receipts, empirical inputs, manifests, and model artifacts remain byte-exact. The only conceptual changes are daily formation completeness, token-resolved representation completeness, exact consumed-window TCA completeness, and nonzero interpretation of absent provider minutes. After future common-RDM and per-fold LightGBM validation selection, a v2 parameter-freeze receipt records selected values, Git commit, config hash, timestamp, and checksummed upstream manifests before any locked-test stage can run. Schemas retain dormant `encoder_capacity`, `predictor_capacity`, `latent_dimension`, `target_sparsity`, `training_data_scale`, and `market_complexity_stratum` fields for future work without varying them now.
 
 The maximum representation matrix is 29: 18 primary, six common-lambda development, three Laplace appendix, and two extra-sparsity runs. Historical main tables cover dataset/folds/exclusions, accessibility/baselines, forecasting, and oracle-relative execution. Main figures cover the frozen capacity curve, model-level forecast performance, forecast error by as-of, and allocation regret with paired intervals. Support, regimes, block-length sensitivity, sparsity, Laplace, and order-size sensitivity remain appendix artifacts. Synthetic fixtures cannot populate historical tables.
 

@@ -14,6 +14,8 @@ Architecture decision records (ADRs) explain durable technical choices, their co
 | [0006](0006-sparse-predictive-representation-paper-framework.md) | Superseded | Add a controlled sparse predictive-representation paper framework |
 | [0007](0007-harden-historical-paper-pipeline-contracts.md) | Superseded | Harden the historical paper pipeline contracts and orchestration |
 | [0008](0008-redirect-paper-to-representation-accessibility.md) | Accepted | Redirect the paper to representation accessibility |
+| [0009](0009-separate-data-quality-by-resolution.md) | Accepted | Separate formation, representation, and execution data quality by resolution |
+| [0010](0010-separate-runtime-approval-from-scientific-config.md) | Accepted | Separate runtime stage approval from scientifically frozen configuration |
 
 ## Recording a decision
 

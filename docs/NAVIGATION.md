@@ -11,7 +11,10 @@ ExecSim uses a small manifest-backed navigation system rather than Nx. The repos
 - Point-in-time rules: `docs/DATA_LEAKAGE_CONTRACT.md`
 - ML design and future training procedure: `docs/ML_DESIGN.md`
 - Sparse-JEPA paper contracts and locked experiment: `docs/PAPER_DESIGN.md`
+- Operational paper-stage authorization: `docs/PAPER_RUNTIME_AUTHORIZATION.md`
 - Sparse-JEPA implementation evidence and gate classification: `docs/PAPER_IMPLEMENTATION_REPORT.md`
+- Sparse-JEPA v2 formation evidence and approval gate: `V2_FORMATION_QUALITY_REPORT.md`
+- Provider and research-method sources: `docs/RESEARCH_REFERENCES.md`
 - Component ownership and validation: `repo_manifest.yaml`
 - Project goals and non-goals: `docs/PROJECT_CONTEXT.md`
 - Completed work and validation history: `docs/IMPLEMENTATION_LOG.md`
@@ -40,11 +43,12 @@ The selector reports the owning area, relevant specifications, tests, and verifi
 | `src/execsim/experiments/` | Config-driven research grids and durable outputs |
 | `src/execsim/reporting/` | TCA aggregation, statistics, figures, Markdown reports |
 | `src/execsim/ml/` | Point-in-time datasets, splits, adapters, training, artifacts |
-| `src/execsim/data/paper/` | Formation statistics, stable identities, frozen universe, SIP acquisition, corporate actions, and exact-grid validation |
+| `src/execsim/data/paper/` | V1 evidence, v2 daily formation, resolution-specific token/minute quality, stable identities, SIP acquisition, corporate actions, and manifests |
 | `src/execsim/ml/sequences/` | Corpus-wide fold stores, fixed session tensors, streaming sample indexes, and train-only normalization |
 | `src/execsim/ml/representations/` | Optional matched dense/rectified-sparse JEPA, streaming training and resume, frozen capacity/observable probes, embeddings, diagnostics, and safe checkpoints |
 | `src/execsim/ml/paper/` | Unified configuration, resource planning, parameter freeze, historical orchestration, learned forecasts, matched TCA/statistics, and main/appendix reports |
-| `configs/paper/sparse_jepa/` | Versioned paper data, model, evaluation, and TCA assumptions |
+| `configs/paper/sparse_jepa/` | Immutable blocked v1 protocol and terminal evidence |
+| `configs/paper/sparse_jepa_v2/` | Active v2 daily/token/minute protocol, design freeze, and authorization defaults |
 | `configs/` | Versioned assumptions and runnable workflows |
 | `scripts/` | Repository checks, deterministic benchmarks, and profiling tools |
 | `tests/` | Unit, invariant, integration, and CLI evidence |

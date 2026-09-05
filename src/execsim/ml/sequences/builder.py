@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from execsim.data.paper.resolution_quality import aggregate_observed_tokens
 from execsim.data.paper.validation import validate_exact_xnys_session
 from execsim.ml.sequences.schemas import FEATURE_COUNT, TOKEN_COUNT, SequenceRecord
 
@@ -33,17 +34,13 @@ def build_session_sequence(
     previous_close: float | None = None,
     training_cutoff: str | None = None,
     data_classification: str = "historical",
+    quality_protocol: str = "exact-minute-v1",
 ) -> SequenceRecord:
-    """Aggregate one complete 390-minute session into 26 causal feature tokens."""
+    """Aggregate one quality-valid session into 26 causal feature tokens."""
     required = {"timestamp", "open", "high", "low", "close", "volume", "trade_count", "vwap"}
     missing = required.difference(bars.columns)
-    if missing or len(bars) != 390:
-        raise ValueError(
-            f"Sequence input requires 390 minutes and columns; missing={sorted(missing)}"
-        )
-    grid_errors = validate_exact_xnys_session(bars)
-    if grid_errors:
-        raise ValueError("Invalid paper session: " + "; ".join(grid_errors))
+    if missing:
+        raise ValueError(f"Sequence input is missing columns: {sorted(missing)}")
     if data_classification != "synthetic_fixture" and (
         seasonal is None or spy_bars is None or spy_seasonal is None or previous_close is None
     ):
@@ -55,16 +52,13 @@ def build_session_sequence(
     timestamps = pd.to_datetime(ordered["timestamp"])
     if timestamps.dt.tz is None or timestamps.duplicated().any():
         raise ValueError("Sequence timestamps must be unique and timezone-aware.")
-    tokens = _aggregate_tokens(ordered)
+    tokens = _tokenize_session(ordered, quality_protocol=quality_protocol, label="paper")
     spy = None
     if spy_bars is not None:
-        spy_errors = validate_exact_xnys_session(spy_bars)
-        if spy_errors:
-            raise ValueError("Invalid SPY paper session: " + "; ".join(spy_errors))
         ordered_spy = spy_bars.sort_values("timestamp", kind="stable").reset_index(drop=True)
-        if not pd.to_datetime(ordered_spy["timestamp"]).equals(timestamps):
-            raise ValueError("SPY and instrument minute timestamps must align exactly.")
-        spy = _aggregate_tokens(ordered_spy)
+        spy = _tokenize_session(ordered_spy, quality_protocol=quality_protocol, label="SPY paper")
+        if not pd.to_datetime(spy["timestamp"]).equals(pd.to_datetime(tokens["timestamp"])):
+            raise ValueError("SPY and instrument token intervals must align exactly.")
     baseline = _baseline(seasonal, cutoff)
     spy_baseline = _baseline(spy_seasonal, cutoff)
     values = np.zeros((TOKEN_COUNT, FEATURE_COUNT), dtype=np.float32)
@@ -127,6 +121,13 @@ def build_session_sequence(
         raw_volume=tokens["volume"].to_numpy(dtype=float),
         raw_vwap=tokens["vwap"].to_numpy(dtype=float),
         causal_baseline_volume=baseline.volume_profile.astype(float),
+        observed_bar_count=(
+            tokens["observed_bar_count"].to_numpy(dtype=np.int16)
+            if "observed_bar_count" in tokens
+            else np.full(TOKEN_COUNT, 15, dtype=np.int16)
+        ),
+        provider_gap_count=390 - len(ordered),
+        quality_protocol=quality_protocol,
         source_sha256=source_sha256,
         cutoff=cutoff,
         training_cutoff=training_cutoff or cutoff,
@@ -159,6 +160,22 @@ def _aggregate_tokens(bars: pd.DataFrame) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows)
+
+
+def _tokenize_session(bars: pd.DataFrame, *, quality_protocol: str, label: str) -> pd.DataFrame:
+    if quality_protocol == "resolution-aware-v2":
+        try:
+            return aggregate_observed_tokens(bars)
+        except ValueError as exc:
+            raise ValueError(f"Invalid {label} session under v2 token quality: {exc}") from exc
+    if quality_protocol != "exact-minute-v1":
+        raise ValueError(f"Unknown paper quality protocol: {quality_protocol}")
+    if len(bars) != 390:
+        raise ValueError(f"{label.capitalize()} sequence input requires 390 minutes.")
+    grid_errors = validate_exact_xnys_session(bars)
+    if grid_errors:
+        raise ValueError(f"Invalid {label} session: " + "; ".join(grid_errors))
+    return _aggregate_tokens(bars)
 
 
 def _baseline(seasonal: pd.DataFrame | None, cutoff: str | None = None) -> _SeasonalBaseline:

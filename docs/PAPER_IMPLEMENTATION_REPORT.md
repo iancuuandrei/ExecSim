@@ -1,19 +1,91 @@
 # Sparse-JEPA paper implementation report
 
-This report records the software state of PR #2 after the research-program
-redirect on 2026-09-05. It distinguishes executable software evidence from
-licensed-data, historical-training, and empirical evidence. It makes no claim
-about representation quality, forecast accuracy, execution cost, or economic
-value.
+Privileged stage execution follows the separate [paper runtime authorization specification](PAPER_RUNTIME_AUTHORIZATION.md). Runtime approval is external to the six scientifically frozen YAML files and requires a matching command-line opt-in; this operational mechanism does not alter the sparse-jepa-v2 protocol hash.
+
+This report records the active `sparse-jepa-v2` corpus-protocol correction and
+the inherited v1 paper software. It distinguishes executable software evidence
+from formation data, target data, historical training, and empirical evidence.
+It makes no claim about representation quality, forecast accuracy, execution
+cost, or economic value.
 
 ## Status
 
 | Evidence class | Status |
 |---|---|
-| Redirected historical experiment software | **SOFTWARE READY** |
-| Real Alpaca SIP corpus | **DATA NOT ACQUIRED** |
+| Sparse-JEPA v1 formation protocol | **BLOCKED** - 62 of 505 eligible |
+| Sparse-JEPA v2 protocol and formation software | **SOFTWARE READY** |
+| V2 formation daily corpus and frozen universe | **FORMATION COMPLETE - AWAITING APPROVAL** |
+| V2 target-period Alpaca SIP corpus | **DATA NOT ACQUIRED** |
 | Historical JEPA and LightGBM fits | **TRAINING NOT RUN** |
 | Locked-test representation, forecast, execution, and paper estimates | **EMPIRICAL RESULT NOT AVAILABLE** |
+
+V1 remains frozen under its original exact-minute formation contract. Its
+terminal evidence manifest is `configs/paper/sparse_jepa/v1-evidence-final.json`;
+the status is `BLOCKED — INSUFFICIENT FORMATION UNIVERSE UNDER LOCKED
+EXACT-MINUTE CRITERION`, the corrected standard-session denominator is 251,
+and all target acquisition, training, locked-test inspection, and TCA stages
+are `NOT RUN`.
+
+V2 changes only data-quality resolution: provider-native daily formation,
+observed-only fixed 15-minute representation tokens, and exact 300-minute TCA
+windows. The unchanged 95% concept now measures valid expected daily sessions.
+No absent provider minute is interpreted as zero activity. The formation result,
+SPY 2021-05-05 token audit, v1/v2 bias diagnostic, resource evidence, and final
+v2 terminal status are recorded in `V2_FORMATION_QUALITY_REPORT.md`.
+
+## Provider semantics gate
+
+**PASS.** Current Alpaca documentation supports the v2 interpretation. Stock
+minute and daily bars are separately aggregated from trades using tape-,
+condition-, and bar-type-specific field rules. A stock bar is emitted only when
+all OHLCV fields are nonzero. Consequently, an absent minute aggregate is not
+evidence that the minute had zero market activity or zero volume. Alpaca's
+higher-interval rule aggregates observed source bars using first open, extrema,
+last close, summed volume and trade count, and volume-weighted VWAP. Direct SIP
+`1Day` retrieval is available. Source links and the observed-grid volatility
+convention are recorded in `docs/RESEARCH_REFERENCES.md`.
+
+## V2 evidence boundary
+
+| Stage | Status |
+|---|---|
+| Official provider-semantics review | **PASS** |
+| V2 protocol documents, ADR 0009, and final freeze | **PASS** |
+| Daily formation acquisition | **PASS** - 126,461 rows, 506 symbols |
+| Formation candidate rebuild and top-100 freeze | **PASS** - 497 eligible, 100 frozen |
+| Formation token-quality and v1/v2 bias diagnostics | **PASS** - 45,464,276 minute rows scanned |
+| Target acquisition | **NOT RUN** - prohibited before formation approval |
+| Historical model training | **NOT RUN** |
+| Locked test and historical TCA | **NOT RUN** |
+
+The current terminal state is `AWAITING V2 FORMATION APPROVAL`. The next
+privileged action, target-period acquisition, requires new explicit approval.
+
+## V2 formation validation evidence
+
+| Gate | Result |
+|---|---|
+| Full repository pytest | **PASS** - 159 tests in 479.10 s |
+| V2 focused resolution/formation/report suite | **PASS** - 18 tests |
+| Ruff lint | **PASS** |
+| Ruff format | **PASS** - 180 files |
+| mypy | **PASS** - 125 source files |
+| Repository-context validation | **PASS** - 14 areas, manifest hash `e46e53dedff85f56c0888a42ba73a56d6462790fcbf1a3b8cfb8d42464a40de2` |
+| Dependency-light smoke | **PASS** - 2 tests |
+| V1 immutable artifact audit | **PASS** - original freeze, separately named safe-default receipt, five evidence hashes, and terminal manifest; no Git object database required |
+| V2 formation freeze artifact audit | **PASS** - eleven evidence hashes and 100 unique members |
+| V2 target corpus path | **NOT CREATED** |
+
+The bounded formation token scan read 45,464,276 minute rows from 1.439 GiB
+of monthly responses in 1,516.73 seconds: 29,975.13 rows/s and 2,167.76
+token attempts/s. Quality output is 2.78 MiB. The scanner's terminal in-process
+RSS field was unavailable due to an incorrect Windows counter binding that was
+subsequently fixed and tested. An operating-system lifetime-peak poll during
+the run observed 267,558,912 bytes (255.16 MiB), which is reported as a lower
+bound rather than an exact terminal peak. The scientific scan was not repeated
+solely to improve telemetry.
+
+## Inherited v1 software evidence
 
 The redirected work began from PR head
 `74bca4403cd351579221a86736d77210821adde3`. Its baseline was 118 passing
@@ -72,7 +144,7 @@ constituent snapshot + formation bars
   -> formation statistics, eligibility, and exclusion receipts
   -> frozen 100-stock universe with stable instrument and sourced symbol history
   -> validated stock + SPY minute corpus and point-in-time action manifest
-  -> exact-grid fold sequence stores (18 observed = 13 dynamic + 5 conditioning)
+  -> v2 token-valid fold sequence stores with observed-bar diagnostics (18 observed = 13 dynamic + 5 conditioning)
   -> TRAIN-only normalizers and deterministic sample indexes
   -> common-lambda selection and streaming dense/sparse JEPA training
   -> frozen accessibility and observable probes
@@ -220,6 +292,8 @@ manifests exist.
 - Locked-test accessibility, forecast, regime, execution, bootstrap, and final
   paper estimates: **EMPIRICAL RESULT NOT AVAILABLE**.
 
-No synthetic result is an empirical paper result. PR #2 is locally merge-ready;
-final merge readiness additionally requires GitHub CI to pass on the exact
-pushed head.
+No synthetic result is an empirical paper result. The inherited v1 software
+evidence does not establish v2 formation readiness. V2 is not complete until
+its daily candidate rebuild, frozen-universe decision, resolution diagnostics,
+resource measurements, checksummed report bundle, and current repository gates
+have executed.

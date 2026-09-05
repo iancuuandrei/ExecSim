@@ -1,0 +1,21 @@
+learning_rate: 0.03
+n_estimators: 2000
+early_stopping_rounds: 100
+num_leaves: [15, 31]
+min_child_samples: [50, 200]
+reg_lambda: [1.0, 10.0]
+feature_fraction: 0.8
+bagging_fraction: 0.8
+bagging_freq: 1
+deterministic: true
+scale_target: log1p_remaining_volume_residual_over_causal_baseline
+shape_target: log_conditional_share_plus_1e-6
+shape_reconstruction: stable_softmax
+categorical_features: [symbol]
+raw_context_tokens: 8
+raw_feature_count_per_token: 18
+embedding_feature_count: 644
+shape_train_origin_bands: [[4, 9], [10, 15], [16, 20], [21, 25]]
+shape_sampling: one_deterministic_origin_per_session_per_band
+shape_weighting: inverse_origin_inclusion_probability_divided_across_future_rows
+main_rows: [ewma, raw, untrained_neural, dense, sparse]

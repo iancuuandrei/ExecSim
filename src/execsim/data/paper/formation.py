@@ -126,6 +126,80 @@ def build_formation_candidates(
     return pd.DataFrame(records).sort_values("instrument_id", kind="stable"), tuple(exclusions)
 
 
+def build_formation_candidates_from_corpus(
+    snapshot: pd.DataFrame,
+    corpus_root: Path,
+    *,
+    expected_session_count: int,
+) -> tuple[pd.DataFrame, tuple[FormationExclusion, ...]]:
+    """Calculate formation statistics one instrument and monthly chunk at a time."""
+    if expected_session_count <= 0:
+        raise ValueError("Formation statistics require a positive expected session count.")
+    from execsim.data.paper.manifests import read_json
+
+    paths_by_instrument: dict[str, list[Path]] = {}
+    for receipt_path in sorted(corpus_root.glob("*.json")):
+        receipt = read_json(receipt_path)
+        if receipt.get("status") != "complete":
+            continue
+        response_path = receipt_path.with_suffix(".response")
+        if not response_path.is_file():
+            raise ValueError(f"Complete formation receipt has no response: {receipt_path}")
+        paths_by_instrument.setdefault(str(receipt["instrument_id"]), []).append(response_path)
+
+    records: list[dict[str, object]] = []
+    exclusions: list[FormationExclusion] = []
+    for constituent in snapshot.itertuples(index=False):
+        instrument_id = str(constituent.instrument_id)
+        symbol = str(constituent.symbol).upper()
+        daily_dollar: list[float] = []
+        prices: list[np.ndarray] = []
+        observed_dates: set[object] = set()
+        for response_path in paths_by_instrument.get(instrument_id, []):
+            chunk = pd.read_parquet(response_path)
+            timestamps = pd.to_datetime(chunk["timestamp"])
+            local_dates = timestamps.dt.tz_convert("America/New_York").dt.date
+            for session_date, session in chunk.groupby(local_dates, sort=True):
+                if session_date in observed_dates:
+                    raise ValueError(
+                        f"Duplicate formation session across chunks: {instrument_id} {session_date}"
+                    )
+                if validate_exact_xnys_session(session):
+                    continue
+                observed_dates.add(session_date)
+                daily_dollar.append(
+                    float((pd.to_numeric(session["vwap"]) * pd.to_numeric(session["volume"])).sum())
+                )
+                prices.append(pd.to_numeric(session["close"]).to_numpy(dtype=float))
+        price_values = np.concatenate(prices) if prices else np.asarray([], dtype=float)
+        completeness = len(observed_dates) / expected_session_count
+        median_price = float(np.median(price_values)) if len(price_values) else 0.0
+        median_dollar = float(np.median(daily_dollar)) if daily_dollar else 0.0
+        reasons = []
+        if str(constituent.security_type) != "ordinary_common_stock":
+            reasons.append("not_ordinary_common_stock")
+        if median_price < 5.0:
+            reasons.append("median_price_below_5")
+        if completeness < 0.95:
+            reasons.append("formation_session_completeness_below_95_percent")
+        if median_dollar <= 0:
+            reasons.append("nonpositive_median_daily_dollar_volume")
+        records.append(
+            {
+                "instrument_id": instrument_id,
+                "symbol": symbol,
+                "security_type": str(constituent.security_type),
+                "in_sp500_on_formation_date": True,
+                "median_price": median_price,
+                "session_completeness": completeness,
+                "median_daily_dollar_volume": median_dollar,
+            }
+        )
+        if reasons:
+            exclusions.append(FormationExclusion(instrument_id, symbol, tuple(reasons)))
+    return pd.DataFrame(records).sort_values("instrument_id", kind="stable"), tuple(exclusions)
+
+
 def write_formation_receipts(
     path: Path,
     *,

@@ -118,7 +118,7 @@ class AcquisitionReceipt:
             self.row_count <= 0
             or not self.instrument_id
             or not self.symbol
-            or self.observed_sessions <= 0
+            or self.observed_sessions < 0
             or self.expected_sessions <= 0
         ):
             raise ValueError("Complete receipts require validated identity and session coverage.")

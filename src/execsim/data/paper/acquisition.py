@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import calendar
 import hashlib
+import json
 import os
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Protocol, cast
+from urllib.error import HTTPError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 import pandas as pd
 
 from execsim.data.paper.manifests import write_json_atomic
 from execsim.data.paper.schemas import (
+    PAPER_BAR_COLUMNS,
     AcquisitionChunk,
     AcquisitionReceipt,
     PaperDataConfig,
@@ -53,16 +58,33 @@ def create_alpaca_sip_fetcher() -> ChunkFetcher:
             end=datetime.combine(chunk.end, datetime.max.time(), tzinfo=UTC),
             adjustment=Adjustment.RAW,
             feed=DataFeed.SIP,
+            asof=chunk.end.isoformat(),
         )
         response = cast(Any, client.get_stock_bars(request))
-        frame = response.df.reset_index()
-        frame["instrument_id"] = chunk.instrument_id
-        frame["symbol"] = chunk.symbol
+        frame = _normalize_alpaca_frame(response.df.reset_index(), chunk)
         buffer = BytesIO()
         frame.to_parquet(buffer, index=False)
         return ProviderResponse(buffer.getvalue(), len(frame))
 
     return fetch
+
+
+def _normalize_alpaca_frame(frame: pd.DataFrame, chunk: AcquisitionChunk) -> pd.DataFrame:
+    """Normalize SDK output, including empty delisted-symbol responses, into corpus schema."""
+    if frame.empty:
+        normalized = pd.DataFrame(columns=PAPER_BAR_COLUMNS)
+    else:
+        timestamps = pd.to_datetime(frame["timestamp"], errors="raise", utc=True).dt.tz_convert(
+            "America/New_York"
+        )
+        regular = (timestamps.dt.time >= datetime.strptime("09:30", "%H:%M").time()) & (
+            timestamps.dt.time <= datetime.strptime("15:59", "%H:%M").time()
+        )
+        normalized = frame.loc[regular].copy()
+        normalized["timestamp"] = timestamps.loc[regular]
+    normalized["instrument_id"] = chunk.instrument_id
+    normalized["symbol"] = chunk.symbol
+    return normalized
 
 
 def monthly_chunks(
@@ -93,6 +115,110 @@ def authorize_acquisition(config: PaperDataConfig, *, cli_enabled: bool) -> None
         )
     if config.feed != "sip":
         raise ValueError("The paper corpus requires Alpaca SIP; IEX fallback is prohibited.")
+
+
+def probe_alpaca_sip_entitlement(
+    config: PaperDataConfig,
+    *,
+    cli_enabled: bool,
+    output: Path,
+) -> dict[str, object]:
+    """Verify old SIP minute access, raw adjustment, pagination, and an exact XNYS grid."""
+    authorize_acquisition(config, cli_enabled=cli_enabled)
+    api_key = os.environ.get("APCA_API_KEY_ID")
+    api_secret = os.environ.get("APCA_API_SECRET_KEY")
+    if not api_key or not api_secret:
+        raise RuntimeError("Missing APCA_API_KEY_ID or APCA_API_SECRET_KEY.")
+    params = {
+        "timeframe": "1Min",
+        "start": "2021-01-04T00:00:00Z",
+        "end": "2021-01-05T00:00:00Z",
+        "adjustment": "raw",
+        "feed": "sip",
+        "asof": "2021-01-04",
+        "limit": "100",
+        "sort": "asc",
+    }
+    bars: list[dict[str, object]] = []
+    pages = 0
+    rate_limit: dict[str, str] = {}
+    page_token: str | None = None
+    while True:
+        query = {**params, **({"page_token": page_token} if page_token else {})}
+        request = Request(
+            "https://data.alpaca.markets/v2/stocks/AAPL/bars?" + urlencode(query),
+            headers={"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret},
+        )
+        try:
+            with urlopen(request, timeout=60) as response:
+                payload = json.loads(response.read())
+                rate_limit = {
+                    name: value
+                    for name in (
+                        "X-RateLimit-Limit",
+                        "X-RateLimit-Remaining",
+                        "X-RateLimit-Reset",
+                    )
+                    if (value := response.headers.get(name)) is not None
+                }
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(
+                f"BLOCKED: Alpaca SIP entitlement probe failed with HTTP {exc.code}: {detail}"
+            ) from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("bars"), list):
+            raise ValueError("Alpaca SIP probe response schema is invalid.")
+        bars.extend(payload["bars"])
+        pages += 1
+        page_token = payload.get("next_page_token")
+        if page_token is None:
+            break
+        if not isinstance(page_token, str) or pages > 20:
+            raise ValueError("Alpaca SIP probe pagination metadata is invalid.")
+    frame = pd.DataFrame(bars).rename(
+        columns={
+            "t": "timestamp",
+            "o": "open",
+            "h": "high",
+            "l": "low",
+            "c": "close",
+            "v": "volume",
+            "n": "trade_count",
+            "vw": "vwap",
+        }
+    )
+    timestamps = pd.to_datetime(frame["timestamp"], errors="raise", utc=True).dt.tz_convert(
+        "America/New_York"
+    )
+    regular = (timestamps.dt.time >= datetime.strptime("09:30", "%H:%M").time()) & (
+        timestamps.dt.time <= datetime.strptime("15:59", "%H:%M").time()
+    )
+    frame = frame.loc[regular].copy()
+    frame["timestamp"] = timestamps.loc[regular]
+    frame["instrument_id"] = "probe-aapl"
+    frame["symbol"] = "AAPL"
+    errors = validate_exact_xnys_session(frame)
+    if errors:
+        raise RuntimeError(f"BLOCKED: Alpaca SIP probe session is invalid: {errors}")
+    receipt = {
+        "schema_version": "paper-alpaca-sip-probe-v1",
+        "status": "PASS",
+        "provider": "alpaca",
+        "feed": "sip",
+        "adjustment": "raw",
+        "symbol": "AAPL",
+        "session_date": "2021-01-04",
+        "regular_session_rows": len(frame),
+        "pages": pages,
+        "pagination_verified": pages > 1,
+        "rate_limit_headers": rate_limit,
+        "paper_config_hash": config.paper_config_hash,
+        "probed_at_utc": datetime.now(UTC).isoformat(),
+    }
+    if pages <= 1:
+        raise RuntimeError("BLOCKED: Alpaca SIP probe did not exercise pagination.")
+    write_json_atomic(output, receipt)
+    return receipt
 
 
 def write_failure_receipt(
@@ -242,6 +368,6 @@ def _validate_provider_response(
             observed += 1
     calendar = __import__("exchange_calendars").get_calendar("XNYS")
     expected_sessions = len(calendar.sessions_in_range(chunk.start, chunk.end))
-    if expected_sessions <= 0 or observed <= 0:
-        raise ValueError("Provider response has no validated regular-session coverage.")
+    if expected_sessions <= 0:
+        raise ValueError("Provider response has no expected XNYS session coverage metadata.")
     return observed, expected_sessions

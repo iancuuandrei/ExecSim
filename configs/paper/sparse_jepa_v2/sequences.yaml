@@ -1,0 +1,25 @@
+schema_version: paper-sequence-v2
+quality_protocol: resolution-aware-v2
+token_minutes: 15
+session_tokens: 26
+feature_count: 18
+context_length: 8
+minimum_context: 4
+first_as_of: "10:30"
+horizons: [1, 2, 4, 8]
+minimum_observed_bars_per_token: 2
+token_aggregation: observed_provider_bars_only
+realized_volatility: observed_close_log_return_sum_of_squares
+missing_minute_policy: never_zero_fill_or_interpolate
+primary_session_rule: all_26_tokens_valid_and_standard_xnys_session
+token_completeness_bands:
+  high_minimum: 0.95
+  medium_minimum: 0.80
+  low_maximum_exclusive: 0.80
+training_as_of_samples_per_session_epoch: 2
+clip_quantiles: [0.005, 0.995]
+scaling: median_iqr
+revin: false
+num_workers: 0
+prefetch_factor: 2
+session_cache_size: 32

@@ -54,6 +54,9 @@ class SequenceRecord:
     raw_volume: np.ndarray
     raw_vwap: np.ndarray
     causal_baseline_volume: np.ndarray
+    observed_bar_count: np.ndarray
+    provider_gap_count: int
+    quality_protocol: str
     source_sha256: str
     cutoff: str
     training_cutoff: str
@@ -69,6 +72,7 @@ class SequenceRecord:
             ("raw_volume", self.raw_volume),
             ("raw_vwap", self.raw_vwap),
             ("causal_baseline_volume", self.causal_baseline_volume),
+            ("observed_bar_count", self.observed_bar_count),
         ):
             if value.shape != (TOKEN_COUNT,):
                 raise ValueError(f"{name} must have shape {(TOKEN_COUNT,)}")
@@ -77,6 +81,12 @@ class SequenceRecord:
             raise ValueError("Valid token features must be finite.")
         if (self.raw_volume[valid] < 0).any():
             raise ValueError("Raw target volume must be non-negative.")
+        if (self.observed_bar_count[valid] < 0).any():
+            raise ValueError("Observed token bar counts must be non-negative.")
+        if self.provider_gap_count < 0:
+            raise ValueError("Provider gap count must be non-negative.")
+        if self.quality_protocol not in {"exact-minute-v1", "resolution-aware-v2"}:
+            raise ValueError("Sequence quality protocol is unknown.")
         if (
             not np.isfinite(self.causal_baseline_volume[valid]).all()
             or (self.causal_baseline_volume[valid] < 0).any()

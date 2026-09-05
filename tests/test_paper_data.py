@@ -1,36 +1,49 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from execsim.data.paper.acquisition import acquire_chunk, authorize_acquisition, monthly_chunks
+from execsim.data.paper.acquisition import (
+    _normalize_alpaca_frame,
+    acquire_chunk,
+    authorize_acquisition,
+    monthly_chunks,
+)
 from execsim.data.paper.corporate_actions import (
     apply_point_in_time_split_adjustment,
     point_in_time_split_factor,
 )
+from execsim.data.paper.formation import (
+    build_formation_candidates,
+    build_formation_candidates_from_corpus,
+)
 from execsim.data.paper.identity import resolve_provider_symbol, validate_symbol_history
-from execsim.data.paper.manifests import stable_hash
+from execsim.data.paper.manifests import stable_hash, write_json_atomic
 from execsim.data.paper.partitions import (
     PAPER_FOLDS,
     resolve_fold_partition,
     validate_fold_membership,
 )
+from execsim.data.paper.planning import build_acquisition_plan
 from execsim.data.paper.schemas import (
     InstrumentSymbolInterval,
     PaperDataConfig,
     ProviderResponse,
 )
+from execsim.data.paper.sources import acquire_constituent_identity_sources
 from execsim.data.paper.universe import select_frozen_universe
 from execsim.data.paper.validation import (
     classify_session,
     validate_exact_xnys_session,
     validate_paper_bars,
 )
-from execsim.ml.paper.orchestration import _acquire_period
+from execsim.ml.paper.orchestration import _acquire_period, _expected_primary_session_count
 
 
 def test_paper_acquisition_is_monthly_sip_and_disabled_by_default() -> None:
@@ -152,6 +165,49 @@ def test_zero_row_acquisition_fails_and_sourced_ticker_history_resolves_identity
         resolve_provider_symbol(intervals, "asset-2", date(2024, 2, 1))
 
 
+def test_nonempty_incomplete_chunk_is_retained_for_exclusion_accounting(tmp_path: Path) -> None:
+    chunk = monthly_chunks("asset-1", "APD", date(2024, 1, 1), date(2024, 1, 31))[0]
+    timestamps = pd.date_range("2024-01-03 09:30", periods=389, freq="min", tz="America/New_York")
+    frame = pd.DataFrame(
+        {
+            "instrument_id": "asset-1",
+            "symbol": "APD",
+            "timestamp": timestamps,
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.0,
+            "close": 100.0,
+            "volume": 1_000,
+            "trade_count": 10,
+            "vwap": 100.0,
+        }
+    )
+    buffer = BytesIO()
+    frame.to_parquet(buffer, index=False)
+    receipt = acquire_chunk(
+        chunk,
+        output_directory=tmp_path,
+        fetch=lambda _: ProviderResponse(buffer.getvalue(), len(frame)),
+        config=PaperDataConfig(allow_network=True),
+        cli_enabled=True,
+        max_attempts=1,
+    )
+
+    assert receipt.status == "complete"
+    assert receipt.observed_sessions == 0
+    assert receipt.expected_sessions > 0
+
+
+def test_empty_delisted_symbol_response_normalizes_to_explicit_zero_row_schema() -> None:
+    chunk = monthly_chunks("asset-1", "TIF", date(2021, 2, 1), date(2021, 2, 28))[0]
+    normalized = _normalize_alpaca_frame(pd.DataFrame(), chunk)
+
+    assert normalized.empty
+    assert {"instrument_id", "symbol", "timestamp", "trade_count", "vwap"}.issubset(
+        normalized.columns
+    )
+
+
 def test_acquisition_period_uses_sourced_partial_aliases_and_blocks_trading_day_gaps(
     tmp_path,
 ) -> None:
@@ -193,6 +249,97 @@ def test_acquisition_period_uses_sourced_partial_aliases_and_blocks_trading_day_
             acquire_chunk=record,
             monthly_chunks=monthly_chunks,
         )
+
+
+def test_acquisition_period_records_zero_row_month_without_claiming_completion(
+    tmp_path: Path,
+) -> None:
+    intervals = (
+        InstrumentSymbolInterval("asset-1", "OLD", date(2024, 1, 1), date(2024, 2, 29), "src"),
+    )
+    attempted = []
+
+    def record(chunk, **_):
+        attempted.append(chunk)
+        if chunk.start.month == 1:
+            cause = ValueError("Provider response row count is zero or does not match metadata.")
+            raise RuntimeError("Acquisition failed") from cause
+
+    completed = _acquire_period(
+        ("asset-1",),
+        intervals,
+        start=date(2024, 1, 1),
+        end=date(2024, 2, 29),
+        output=tmp_path,
+        fetcher=object(),
+        data=PaperDataConfig(allow_network=True),
+        acquire_chunk=record,
+        monthly_chunks=monthly_chunks,
+    )
+
+    assert completed == 1
+    assert [item.start.month for item in attempted] == [1, 2]
+
+
+def test_streaming_formation_statistics_match_in_memory_builder(tmp_path: Path) -> None:
+    snapshot = pd.DataFrame(
+        {
+            "instrument_id": ["asset-1"],
+            "symbol": ["AAPL"],
+            "security_type": ["ordinary_common_stock"],
+            "effective_date": ["2021-01-04"],
+            "source": ["fixture"],
+        }
+    )
+    sessions = []
+    for session_date, close, volume in (
+        ("2021-01-04", 100.0, 1_000),
+        ("2021-02-01", 120.0, 2_000),
+    ):
+        timestamps = pd.date_range(
+            f"{session_date} 09:30", periods=390, freq="min", tz="America/New_York"
+        )
+        sessions.append(
+            pd.DataFrame(
+                {
+                    "instrument_id": "asset-1",
+                    "symbol": "AAPL",
+                    "timestamp": timestamps,
+                    "open": close,
+                    "high": close + 1,
+                    "low": close - 1,
+                    "close": close,
+                    "volume": volume,
+                    "trade_count": 10,
+                    "vwap": close,
+                }
+            )
+        )
+    for index, session in enumerate(sessions):
+        stem = tmp_path / f"chunk-{index}"
+        session.to_parquet(stem.with_suffix(".response"), index=False)
+        write_json_atomic(
+            stem.with_suffix(".json"),
+            {"status": "complete", "instrument_id": "asset-1"},
+        )
+
+    in_memory, expected_exclusions = build_formation_candidates(
+        snapshot, pd.concat(sessions, ignore_index=True), expected_session_count=2
+    )
+    streamed, actual_exclusions = build_formation_candidates_from_corpus(
+        snapshot, tmp_path, expected_session_count=2
+    )
+
+    pd.testing.assert_frame_equal(streamed.reset_index(drop=True), in_memory.reset_index(drop=True))
+    assert actual_exclusions == expected_exclusions
+
+
+def test_formation_completeness_denominator_excludes_early_closes() -> None:
+    import exchange_calendars as xcals
+
+    calendar = xcals.get_calendar("XNYS")
+
+    assert _expected_primary_session_count(calendar, "2021-01-04", "2021-12-31") == 251
 
 
 def test_universe_is_frozen_by_formation_liquidity_with_stable_ties() -> None:
@@ -316,3 +463,74 @@ def test_exact_xnys_grid_rejects_compensating_extra_timezone_and_order_corruptio
     duplicated = frame.copy()
     duplicated.loc[1, "timestamp"] = duplicated.loc[0, "timestamp"]
     assert any("duplicate" in error for error in validate_exact_xnys_session(duplicated))
+
+
+def test_pinned_constituent_source_builds_snapshot_identity_and_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = [
+        {
+            "symbol": f"S{index:03d}",
+            "cik": f"{index + 1:010d}",
+            "name": f"Issuer {index}",
+            "sector": "industrials",
+            "date_added": "2020-01-01",
+            "date_removed": "",
+            "created_at": "2020-01-01",
+        }
+        for index in range(500)
+    ]
+    rows.append(
+        {
+            **rows[0],
+            "symbol": "RENAMED",
+            "created_at": "2022-06-01",
+        }
+    )
+    content = pd.DataFrame(rows).to_csv(index=False).encode()
+    monkeypatch.setattr(
+        "execsim.data.paper.sources.COMPONENTS_SHA256", hashlib.sha256(content).hexdigest()
+    )
+    snapshot_path = tmp_path / "formation" / "constituents.parquet"
+    ticker_path = tmp_path / "formation" / "ticker_history.parquet"
+    receipt = acquire_constituent_identity_sources(
+        formation_date=date(2021, 1, 4),
+        target_end=date(2025, 12, 31),
+        snapshot_output=snapshot_path,
+        ticker_history_output=ticker_path,
+        receipt_output=tmp_path / "formation-source.json",
+        spy_instrument_id="benchmark-spy",
+        content=content,
+    )
+    snapshot = pd.read_parquet(snapshot_path)
+    ticker = pd.read_parquet(ticker_path)
+    intervals = tuple(
+        InstrumentSymbolInterval(
+            row.instrument_id,
+            row.symbol,
+            date.fromisoformat(row.start),
+            date.fromisoformat(row.end),
+            row.source,
+        )
+        for row in ticker.itertuples(index=False)
+    )
+    plan = build_acquisition_plan(
+        snapshot=snapshot,
+        intervals=intervals,
+        formation_start=date(2021, 1, 4),
+        formation_end=date(2021, 12, 31),
+        target_start=date(2022, 1, 3),
+        target_end=date(2025, 12, 31),
+        target_universe_size=100,
+        spy_instrument_id="benchmark-spy",
+        output_directory=tmp_path / "plan",
+        paper_config_hash="f" * 64,
+    )
+
+    assert receipt["snapshot_rows"] == 500
+    assert ticker.loc[ticker["instrument_id"].str.endswith("S000"), "symbol"].tolist() == [
+        "S000",
+        "RENAMED",
+    ]
+    assert plan["formation"]["candidate_instruments_including_spy"] == 501
+    assert (tmp_path / "plan" / "ACQUISITION_PLAN.md").is_file()

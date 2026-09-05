@@ -15,21 +15,29 @@ from execsim.data.paper.corporate_action_manifest import (
     write_corporate_action_manifest,
 )
 from execsim.data.paper.formation import (
-    build_formation_candidates,
+    build_formation_candidates_from_corpus,
     ingest_constituent_snapshot,
     write_formation_receipts,
 )
+from execsim.data.paper.formation_v2 import (
+    build_daily_formation_candidates,
+    select_v2_universe,
+    write_v2_universe_manifest,
+)
 from execsim.data.paper.identity import resolve_provider_symbol, validate_symbol_history
-from execsim.data.paper.manifests import file_sha256, read_json, stable_hash
+from execsim.data.paper.manifests import file_sha256, read_json, stable_hash, write_json_atomic
+from execsim.data.paper.resolution_quality import assess_session_resolution_quality
 from execsim.data.paper.schemas import InstrumentSymbolInterval
 from execsim.data.paper.universe import select_frozen_universe, write_universe_manifest
 from execsim.data.paper.validation import validate_exact_xnys_session
-from execsim.ml.paper.configs import PaperRunConfig
+from execsim.ml.paper.configs import PaperRunConfig, PaperRuntimeApproval
 from execsim.ml.sequences.corpus import build_fold_sequence_corpus
 
 
 def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
     """Produce candidate statistics, receipts, and the frozen sourced-identity universe."""
+    if config.paper_run_id == "sparse-jepa-v2":
+        return _build_v2_universe_stage(config)
     snapshot_path = Path(config.data["constituent_snapshot"])
     formation_root = Path(config.data["formation_corpus_root"])
     ticker_path = Path(config.data["ticker_history"])
@@ -37,14 +45,13 @@ def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
         if not path.exists():
             raise RuntimeError(f"BLOCKED: required formation input is unavailable: {path}")
     snapshot = ingest_constituent_snapshot(snapshot_path)
-    formation = _load_parquet_corpus(formation_root)
     import exchange_calendars as xcals
 
     calendar = xcals.get_calendar("XNYS")
     formation_start, formation_end = config.data["formation_period"]
-    expected = len(calendar.sessions_in_range(formation_start, formation_end))
-    candidates, exclusions = build_formation_candidates(
-        snapshot, formation, expected_session_count=expected
+    expected = _expected_primary_session_count(calendar, formation_start, formation_end)
+    candidates, exclusions = build_formation_candidates_from_corpus(
+        snapshot, formation_root, expected_session_count=expected
     )
     artifact_root = config.artifact_root / "formation"
     artifact_root.mkdir(parents=True, exist_ok=True)
@@ -100,20 +107,139 @@ def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
     }
 
 
-def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[str, object]:
+def _build_v2_universe_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Build the v2 universe only from direct daily formation observations."""
+    snapshot_path = Path(config.data["constituent_snapshot"])
+    daily_path = Path(config.data["formation_daily_corpus"])
+    ticker_path = Path(config.data["ticker_history"])
+    for path in (snapshot_path, daily_path, ticker_path):
+        if not path.is_file():
+            raise RuntimeError(f"BLOCKED: required v2 formation input is unavailable: {path}")
+    snapshot = ingest_constituent_snapshot(snapshot_path)
+    daily = pd.read_parquet(daily_path)
+    import exchange_calendars as xcals
+
+    formation_start, formation_end = config.data["formation_period"]
+    expected = tuple(
+        value.date()
+        for value in xcals.get_calendar("XNYS").sessions_in_range(formation_start, formation_end)
+    )
+    candidates = build_daily_formation_candidates(
+        snapshot,
+        daily,
+        expected_session_dates=expected,
+        identity_source_hash=file_sha256(ticker_path),
+    )
+    artifact_root = config.artifact_root / "formation"
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    candidates_path = artifact_root / "candidates-v2.parquet"
+    candidates.to_parquet(candidates_path, index=False)
+    eligible = (
+        (candidates["security_type"] == "ordinary_common_stock")
+        & candidates["in_sp500_on_formation_date"].astype(bool)
+        & (candidates["median_daily_price"] >= 5.0)
+        & (
+            candidates["daily_completeness"]
+            >= float(config.data["formation_daily_completeness_minimum"])
+        )
+        & (candidates["median_daily_dollar_volume"] > 0)
+        & candidates["instrument_id"].astype(str).str.len().gt(0)
+    )
+    eligibility_path = artifact_root / "eligibility-v2.json"
+    write_json_atomic(
+        eligibility_path,
+        {
+            "schema_version": "paper-v2-formation-eligibility-v1",
+            "protocol_id": config.paper_run_id,
+            "paper_config_hash": config.config_hash,
+            "candidate_table_sha256": file_sha256(candidates_path),
+            "candidate_count": len(candidates),
+            "eligible_count": int(eligible.sum()),
+            "exclusions": [
+                {
+                    "instrument_id": str(row.instrument_id),
+                    "formation_symbol": str(row.formation_symbol),
+                    "reasons": str(row.exclusion_reasons),
+                }
+                for row in candidates.loc[~eligible].itertuples(index=False)
+            ],
+        },
+    )
+    members = select_v2_universe(candidates, size=int(config.data["universe_size"]))
+    intervals = _symbol_intervals(pd.read_parquet(ticker_path))
+    validate_symbol_history(intervals)
+    member_ids = {member.instrument_id for member in members}
+    member_ids.add(str(config.data["spy_instrument_id"]))
+    retained = tuple(item for item in intervals if item.instrument_id in member_ids)
+    missing = member_ids.difference(item.instrument_id for item in retained)
+    if missing:
+        raise RuntimeError(
+            f"BLOCKED: sourced ticker history is missing instruments: {sorted(missing)}"
+        )
+    output = Path(config.data["universe_manifest"])
+    manifest_path = write_v2_universe_manifest(
+        members,
+        output=output,
+        source_hashes=(
+            file_sha256(snapshot_path),
+            file_sha256(ticker_path),
+            file_sha256(daily_path),
+            file_sha256(candidates_path),
+        ),
+        symbol_history=tuple(
+            {
+                "instrument_id": item.instrument_id,
+                "symbol": item.symbol,
+                "start": item.start.isoformat(),
+                "end": item.end.isoformat(),
+                "source": item.source,
+            }
+            for item in retained
+        ),
+        paper_config_hash=config.config_hash,
+    )
+    return {
+        "status": "SOFTWARE READY",
+        "members": len(members),
+        "candidates": str(candidates_path),
+        "eligibility_receipt": str(eligibility_path),
+        "manifest": str(manifest_path),
+    }
+
+
+def download_data_stage(
+    config: PaperRunConfig,
+    *,
+    cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Acquire formation candidates, freeze the universe, then acquire target bars."""
     from execsim.data.paper.acquisition import (
         acquire_chunk,
         create_alpaca_sip_fetcher,
         monthly_chunks,
+        probe_alpaca_sip_entitlement,
     )
+    from execsim.data.paper.planning import build_acquisition_plan
     from execsim.data.paper.schemas import PaperDataConfig
+    from execsim.data.paper.sources import acquire_constituent_identity_sources
 
-    config.authorize("network", cli_enabled=cli_enabled)
+    config.authorize("target_acquisition", approval=runtime_approval, cli_enabled=cli_enabled)
     snapshot_path = Path(config.data["constituent_snapshot"])
     ticker_path = Path(config.data["ticker_history"])
+    formation_start = _as_date(config.data["formation_period"][0])
+    formation_end = _as_date(config.data["formation_period"][1])
+    target_start = _as_date(config.data["target_period"][0])
+    target_end = _as_date(config.data["target_period"][1])
     if not snapshot_path.is_file() or not ticker_path.is_file():
-        raise RuntimeError("BLOCKED: constituent snapshot or ticker history is unavailable.")
+        acquire_constituent_identity_sources(
+            formation_date=formation_start,
+            target_end=target_end,
+            snapshot_output=snapshot_path,
+            ticker_history_output=ticker_path,
+            receipt_output=config.artifact_root / "acquisition" / "formation-source.json",
+            spy_instrument_id=str(config.data["spy_instrument_id"]),
+        )
     snapshot = ingest_constituent_snapshot(snapshot_path)
     intervals = _symbol_intervals(pd.read_parquet(ticker_path))
     validate_symbol_history(intervals)
@@ -124,30 +250,71 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         timezone=cast(Any, config.data["timezone"]),
         adjustment=cast(Any, config.data["adjustment"]),
         extended_hours=bool(config.data["extended_hours"]),
-        formation_start=_as_date(config.data["formation_period"][0]),
-        formation_end=_as_date(config.data["formation_period"][1]),
-        target_start=_as_date(config.data["target_period"][0]),
-        target_end=_as_date(config.data["target_period"][1]),
+        formation_start=formation_start,
+        formation_end=formation_end,
+        target_start=target_start,
+        target_end=target_end,
         allow_network=True,
         paper_config_hash=config.config_hash,
     )
+    acquisition_root = config.artifact_root / "acquisition"
+    plan = build_acquisition_plan(
+        snapshot=snapshot,
+        intervals=intervals,
+        formation_start=formation_start,
+        formation_end=formation_end,
+        target_start=target_start,
+        target_end=target_end,
+        target_universe_size=int(config.data["universe_size"]),
+        spy_instrument_id=str(config.data["spy_instrument_id"]),
+        output_directory=acquisition_root,
+        paper_config_hash=config.config_hash,
+        protocol_id=config.paper_run_id,
+        formation_frequency=str(config.data.get("formation_frequency", "1min")),
+    )
+    probe_path = acquisition_root / "alpaca-sip-probe.json"
+    probe = (
+        read_json(probe_path)
+        if probe_path.is_file()
+        else probe_alpaca_sip_entitlement(data, cli_enabled=True, output=probe_path)
+    )
+    if probe.get("paper_config_hash") != config.config_hash or probe.get("status") != "PASS":
+        raise ValueError("Existing Alpaca SIP probe is incompatible with this paper run.")
     fetcher = create_alpaca_sip_fetcher()
     spy_id = str(config.data["spy_instrument_id"])
-    formation_ids = tuple(dict.fromkeys((*snapshot["instrument_id"].astype(str), spy_id)))
-    formation_chunks = _acquire_period(
-        formation_ids,
-        intervals,
-        start=data.formation_start,
-        end=data.formation_end,
-        output=Path(config.data["formation_corpus_root"]),
-        fetcher=fetcher,
-        data=data,
-        acquire_chunk=acquire_chunk,
-        monthly_chunks=monthly_chunks,
-    )
+    if config.paper_run_id == "sparse-jepa-v2":
+        from execsim.data.paper.daily_acquisition import acquire_formation_daily_bars
+
+        daily_receipt = acquire_formation_daily_bars(
+            snapshot,
+            formation_start=formation_start,
+            formation_end=formation_end,
+            spy_instrument_id=spy_id,
+            output_path=Path(config.data["formation_daily_corpus"]),
+            receipt_path=Path(config.data["formation_daily_receipt"]),
+            paper_config_hash=config.config_hash,
+            cli_enabled=True,
+            config_enabled=True,
+        )
+        formation_chunks: int | dict[str, object] = daily_receipt
+        formation_output = str(config.data["formation_daily_corpus"])
+    else:
+        formation_ids = tuple(dict.fromkeys((*snapshot["instrument_id"].astype(str), spy_id)))
+        formation_chunks = _acquire_period(
+            formation_ids,
+            intervals,
+            start=data.formation_start,
+            end=data.formation_end,
+            output=Path(config.data["formation_corpus_root"]),
+            fetcher=fetcher,
+            data=data,
+            acquire_chunk=acquire_chunk,
+            monthly_chunks=monthly_chunks,
+        )
+        formation_output = str(config.data["formation_corpus_root"])
     universe_path = Path(config.data["universe_manifest"])
     universe_result: dict[str, object] | str = "reused"
-    if not universe_path.is_file():
+    if not _is_frozen_universe(universe_path, config_hash=config.config_hash):
         universe_result = build_universe_stage(config)
     universe = read_json(universe_path)
     target_ids = tuple(
@@ -168,24 +335,73 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         "status": "SOFTWARE READY",
         "formation_chunks": formation_chunks,
         "target_chunks": target_chunks,
+        "acquisition_plan": plan,
+        "provider_probe": probe,
         "universe": universe_result,
-        "formation_output": str(config.data["formation_corpus_root"]),
+        "formation_output": formation_output,
         "target_output": str(config.data["target_corpus_root"]),
     }
 
 
+def _expected_primary_session_count(calendar: Any, start: object, end: object) -> int:
+    """Count only full 390-minute XNYS sessions eligible for the primary corpus."""
+    return sum(
+        len(calendar.session_minutes(session)) == 390
+        for session in calendar.sessions_in_range(start, end)
+    )
+
+
 def validate_data_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
-    """Validate every retained raw session against the exact XNYS minute grid."""
+    """Validate target sessions under the configured representation-quality protocol."""
     root = source or Path(config.data["target_corpus_root"])
     frame = _load_parquet_corpus(root)
+    universe = read_json(Path(config.data["universe_manifest"]))
+    symbol_intervals = _symbol_intervals(pd.DataFrame(universe.get("symbol_history", ())))
+    validate_symbol_history(symbol_intervals)
+    allowed_instruments = {
+        *(str(member["instrument_id"]) for member in universe.get("members", ())),
+        str(config.data["spy_instrument_id"]),
+    }
     timestamps = pd.to_datetime(frame["timestamp"])
     dates = timestamps.dt.tz_convert("America/New_York").dt.date
+    protocol = str(config.sequences.get("quality_protocol", "exact-minute-v1"))
     errors = []
+    quality_rows = []
     valid = 0
     for (instrument, session_date), session in frame.groupby(
         [frame["instrument_id"].astype(str), dates], sort=True
     ):
-        session_errors = validate_exact_xnys_session(session)
+        identity_errors: list[str] = []
+        if instrument not in allowed_instruments:
+            identity_errors.append("instrument is not in the frozen universe or SPY")
+        observed_symbols = tuple(session["symbol"].astype(str).str.upper().drop_duplicates())
+        if len(observed_symbols) != 1:
+            identity_errors.append("session must contain one observed symbol")
+        else:
+            try:
+                expected_symbol = resolve_provider_symbol(
+                    symbol_intervals, instrument, session_date
+                )
+            except RuntimeError as exc:
+                identity_errors.append(str(exc))
+            else:
+                if observed_symbols[0] != expected_symbol:
+                    identity_errors.append(
+                        f"observed symbol {observed_symbols[0]} does not match "
+                        f"sourced symbol {expected_symbol}"
+                    )
+        session_errors: tuple[str, ...]
+        if protocol == "resolution-aware-v2":
+            quality = assess_session_resolution_quality(session)
+            quality_rows.append(quality.to_dict())
+            session_errors = (
+                () if quality.token_valid_full_session else (quality.invalid_token_reason,)
+            )
+        elif protocol == "exact-minute-v1":
+            session_errors = validate_exact_xnys_session(session)
+        else:
+            raise ValueError(f"Unknown paper quality protocol: {protocol}")
+        session_errors = (*identity_errors, *session_errors)
         if session_errors:
             errors.append(
                 {
@@ -196,7 +412,13 @@ def validate_data_stage(config: PaperRunConfig, source: Path | None = None) -> d
             )
         else:
             valid += 1
-    return {"valid": not errors, "valid_sessions": valid, "invalid_sessions": errors}
+    return {
+        "valid": not errors,
+        "quality_protocol": protocol,
+        "valid_sessions": valid,
+        "invalid_sessions": errors,
+        "session_quality": quality_rows,
+    }
 
 
 def build_sequences_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
@@ -228,6 +450,8 @@ def build_sequences_stage(config: PaperRunConfig, source: Path | None = None) ->
             config_hash=config.config_hash,
             spy_instrument_id=str(config.data["spy_instrument_id"]),
             data_classification="historical",
+            quality_protocol=str(config.sequences["quality_protocol"]),
+            symbol_history=tuple(universe.get("symbol_history", ())),
         )
         manifests.append(asdict(built))
     return {"status": "SOFTWARE READY", "folds": manifests}
@@ -254,12 +478,16 @@ def validate_sequences_stage(config: PaperRunConfig) -> dict[str, object]:
 def select_rdm_lambda_stage(
     config: PaperRunConfig,
     *,
-    allow_historical_training: bool,
+    training_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
     trusted_local_resume: bool = False,
 ) -> dict[str, object]:
     """Run the six predeclared Fold 1 candidates and freeze one common coefficient."""
-    if not allow_historical_training:
-        raise PermissionError("RDM lambda selection requires historical-training authorization.")
+    config.authorize(
+        "historical_training",
+        approval=runtime_approval,
+        cli_enabled=training_cli_enabled,
+    )
     import torch
 
     from execsim.ml.representations.checkpoints import load_checkpoint
@@ -403,7 +631,8 @@ def select_rdm_lambda_stage(
 def train_representations_stage(
     config: PaperRunConfig,
     *,
-    allow_historical_training: bool,
+    training_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
     trusted_local_resume: bool = False,
 ) -> dict[str, object]:
     """Train the locked fold/seed/dense-sparse matrix using streaming historical loaders."""
@@ -416,8 +645,11 @@ def train_representations_stage(
     from execsim.ml.representations.jepa import PredictiveRepresentationModel
     from execsim.ml.representations.schemas import CheckpointCompatibility, RepresentationConfig
 
-    if not allow_historical_training:
-        raise PermissionError("Historical representation training requires separate authorization.")
+    config.authorize(
+        "historical_training",
+        approval=runtime_approval,
+        cli_enabled=training_cli_enabled,
+    )
     values = config.representation
     options = HistoricalTrainerOptions(
         batch_size=int(values["batch_size"]),
@@ -437,7 +669,8 @@ def train_representations_stage(
     if not selection_path.is_file():
         select_rdm_lambda_stage(
             config,
-            allow_historical_training=True,
+            training_cli_enabled=training_cli_enabled,
+            runtime_approval=runtime_approval,
             trusted_local_resume=trusted_local_resume,
         )
     selection = _load_common_lambda_receipt(config)
@@ -606,11 +839,17 @@ def export_embeddings_stage(config: PaperRunConfig) -> dict[str, object]:
 
 
 def train_volume_models_stage(
-    config: PaperRunConfig, *, allow_historical_training: bool
+    config: PaperRunConfig,
+    *,
+    training_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
 ) -> dict[str, object]:
     """Train the exact validation-only LightGBM grid for all locked feature rows."""
-    if not allow_historical_training:
-        raise PermissionError("Historical LightGBM fitting requires separate authorization.")
+    config.authorize(
+        "historical_training",
+        approval=runtime_approval,
+        cli_enabled=training_cli_enabled,
+    )
     from execsim.data.paper.manifests import write_json_atomic
     from execsim.ml.models.lightgbm_adapter import (
         LightGBMConfig,
@@ -784,8 +1023,18 @@ def train_volume_models_stage(
     }
 
 
-def evaluate_forecasts_stage(config: PaperRunConfig) -> dict[str, object]:
+def evaluate_forecasts_stage(
+    config: PaperRunConfig,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Evaluate frozen LightGBM artifacts on locked test rows without model selection."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     from execsim.forecasting import HistoricalProfileForecaster
     from execsim.ml.models.lightgbm_adapter import LightGBMVolumeModel
@@ -948,8 +1197,18 @@ def evaluate_forecasts_stage(config: PaperRunConfig) -> dict[str, object]:
     return {"status": "SOFTWARE READY", "rows": len(output), "artifact": str(destination)}
 
 
-def evaluate_representations_stage(config: PaperRunConfig) -> dict[str, object]:
+def evaluate_representations_stage(
+    config: PaperRunConfig,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Run the frozen capacity ladder, observable probe, and exploratory support analysis."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     import json
 
@@ -1110,8 +1369,19 @@ def evaluate_representations_stage(config: PaperRunConfig) -> dict[str, object]:
     }
 
 
-def run_tca_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
+def run_tca_stage(
+    config: PaperRunConfig,
+    source: Path | None = None,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Run main, seed-specific, and 1%/5% ADV matched historical TCA outputs."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     from execsim.forecasting import HistoricalProfileForecaster
     from execsim.ml.models.lightgbm_adapter import LightGBMVolumeModel
@@ -1274,8 +1544,18 @@ def run_tca_stage(config: PaperRunConfig, source: Path | None = None) -> dict[st
     return {"status": "SOFTWARE READY", **paths}
 
 
-def report_stage(config: PaperRunConfig) -> dict[str, object]:
+def report_stage(
+    config: PaperRunConfig,
+    *,
+    full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None,
+) -> dict[str, object]:
     """Construct named historical tables, matched inference, and the real report bundle."""
+    config.authorize(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
     _require_parameter_freeze(config)
     from execsim.ml.paper.reports import (
         FIGURE_NAMES,
@@ -1594,25 +1874,68 @@ def run_authorized_stages(
     network_cli_enabled: bool,
     training_cli_enabled: bool,
     full_run_cli_enabled: bool,
+    runtime_approval: PaperRuntimeApproval | None = None,
     trusted_local_resume: bool = False,
 ) -> dict[str, object]:
     """Resume idempotently through stages whose separate authorizations are present."""
     results: dict[str, object] = {}
     universe = Path(config.data["universe_manifest"])
-    formation_root = Path(config.data["formation_corpus_root"])
     target_root = Path(config.data["target_corpus_root"])
-    if not universe.is_file() and not _has_parquet_corpus(formation_root):
-        if config.allow_network:
-            results["download_data"] = download_data_stage(config, cli_enabled=network_cli_enabled)
+    network_requested = network_cli_enabled or (
+        runtime_approval is not None and runtime_approval.approves("target_acquisition")
+    )
+    training_requested = training_cli_enabled or (
+        runtime_approval is not None and runtime_approval.approves("historical_training")
+    )
+    evaluation_requested = full_run_cli_enabled or (
+        runtime_approval is not None and runtime_approval.approves("locked_result_evaluation")
+    )
+    network_enabled = config.authorization_granted(
+        "target_acquisition", approval=runtime_approval, cli_enabled=network_cli_enabled
+    )
+    training_enabled = config.authorization_granted(
+        "historical_training", approval=runtime_approval, cli_enabled=training_cli_enabled
+    )
+    evaluation_enabled = config.authorization_granted(
+        "locked_result_evaluation",
+        approval=runtime_approval,
+        cli_enabled=full_run_cli_enabled,
+    )
+    if network_requested and not network_enabled:
+        config.authorize(
+            "target_acquisition", approval=runtime_approval, cli_enabled=network_cli_enabled
+        )
+    if training_requested and not training_enabled:
+        config.authorize(
+            "historical_training", approval=runtime_approval, cli_enabled=training_cli_enabled
+        )
+    if evaluation_requested and not evaluation_enabled:
+        config.authorize(
+            "locked_result_evaluation",
+            approval=runtime_approval,
+            cli_enabled=full_run_cli_enabled,
+        )
+    frozen_universe = _is_frozen_universe(universe, config_hash=config.config_hash)
+    if not frozen_universe and not _formation_artifacts_ready(config):
+        if network_enabled:
+            results["download_data"] = download_data_stage(
+                config,
+                cli_enabled=network_cli_enabled,
+                runtime_approval=runtime_approval,
+            )
         else:
             results["download_data"] = "DATA NOT ACQUIRED"
             return results
-    if not universe.is_file():
+    if not _is_frozen_universe(universe, config_hash=config.config_hash):
         results["build_universe"] = build_universe_stage(config)
     else:
         results["build_universe"] = "reused"
-    if config.allow_network and "download_data" not in results:
-        results["download_data"] = download_data_stage(config, cli_enabled=network_cli_enabled)
+    if network_enabled and "download_data" not in results:
+        results["download_data"] = download_data_stage(
+            config,
+            cli_enabled=network_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
     elif not _has_parquet_corpus(target_root):
         results["download_data"] = "DATA NOT ACQUIRED"
         return results
@@ -1638,39 +1961,62 @@ def run_authorized_stages(
             for name, value in config.representation["safe_resource_bounds"].items()
         },
     )
-    if config.allow_historical_training:
-        if not training_cli_enabled:
-            raise PermissionError("Paper run requires --enable-historical-training.")
+    if training_enabled:
         selection_receipt = config.artifact_root / "selection" / "rdm-lambda.json"
         if not selection_receipt.is_file():
             results["select_rdm_lambda"] = select_rdm_lambda_stage(
                 config,
-                allow_historical_training=True,
+                training_cli_enabled=training_cli_enabled,
+                runtime_approval=runtime_approval,
                 trusted_local_resume=trusted_local_resume,
             )
         else:
             results["select_rdm_lambda"] = "reused"
         results["train_representations"] = train_representations_stage(
             config,
-            allow_historical_training=True,
+            training_cli_enabled=training_cli_enabled,
+            runtime_approval=runtime_approval,
             trusted_local_resume=trusted_local_resume,
         )
         results["export_embeddings"] = export_embeddings_stage(config)
         results["train_volume_models"] = train_volume_models_stage(
-            config, allow_historical_training=True
+            config,
+            training_cli_enabled=training_cli_enabled,
+            runtime_approval=runtime_approval,
         )
     else:
         results["training"] = "TRAINING NOT RUN"
-    if config.allow_full_paper_run:
-        if not full_run_cli_enabled:
-            raise PermissionError("Paper run requires --enable-full-paper-run.")
-        results["evaluate_forecast"] = evaluate_forecasts_stage(config)
-        results["evaluate_representation"] = evaluate_representations_stage(config)
-        results["run_tca"] = run_tca_stage(config)
-        results["report"] = report_stage(config)
+    if evaluation_enabled:
+        results["evaluate_forecast"] = evaluate_forecasts_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
+        results["evaluate_representation"] = evaluate_representations_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
+        results["run_tca"] = run_tca_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
+        results["report"] = report_stage(
+            config,
+            full_run_cli_enabled=full_run_cli_enabled,
+            runtime_approval=runtime_approval,
+        )
     else:
         results["evaluation"] = "EMPIRICAL RESULT NOT AVAILABLE"
     return results
+
+
+def _formation_artifacts_ready(config: PaperRunConfig) -> bool:
+    """Resolve formation readiness using the selected protocol's own data contract."""
+    if config.paper_run_id == "sparse-jepa-v2":
+        return Path(config.data["formation_daily_corpus"]).is_file()
+    return _has_parquet_corpus(Path(config.data["formation_corpus_root"]))
 
 
 def _assert_representation_reuse(
@@ -1808,14 +2154,23 @@ def _acquire_period(
             for chunk in monthly_chunks(
                 instrument_id, interval.symbol, interval_start, interval_end
             ):
-                acquire_chunk(
-                    chunk,
-                    output_directory=output,
-                    fetch=fetcher,
-                    config=data,
-                    cli_enabled=True,
-                )
-                completed += 1
+                try:
+                    acquire_chunk(
+                        chunk,
+                        output_directory=output,
+                        fetch=fetcher,
+                        config=data,
+                        cli_enabled=True,
+                    )
+                    completed += 1
+                except RuntimeError as exc:
+                    causes = []
+                    current: BaseException | None = exc
+                    while current is not None:
+                        causes.append(str(current))
+                        current = current.__cause__
+                    if not any("row count is zero" in message for message in causes):
+                        raise
     return completed
 
 
@@ -1841,6 +2196,19 @@ def _has_parquet_corpus(path: Path) -> bool:
     return path.is_dir() and (
         next(path.rglob("*.parquet"), None) is not None
         or next(path.rglob("*.response"), None) is not None
+    )
+
+
+def _is_frozen_universe(path: Path, *, config_hash: str) -> bool:
+    """Reject the tracked NOT RUN placeholder and incompatible empirical manifests."""
+    if not path.is_file():
+        return False
+    payload = read_json(path)
+    return (
+        payload.get("status") == "complete"
+        and payload.get("paper_config_hash") == config_hash
+        and isinstance(payload.get("members"), list)
+        and len(payload["members"]) == 100
     )
 
 

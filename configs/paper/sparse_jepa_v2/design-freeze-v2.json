@@ -1,0 +1,179 @@
+{
+  "schema_version": "paper-design-freeze-v3",
+  "protocol_id": "sparse-jepa-v2",
+  "protocol_version": 2,
+  "status": "PROTOCOL_FROZEN",
+  "frozen_at_utc": "2026-09-05T18:49:54.1252342Z",
+  "git_commit": "8977ce7e422167bae8bc1b3520b6e8dbeba2ed0a",
+  "paper_config_sha256": "e0a926869b8882ff3a3f031bda046786ccaf9194ad9a6f1e4a5b7c9846609ed1",
+  "source_specification": "docs/PAPER_DESIGN.md",
+  "source_specification_sha256": "2305bc662d1fa400df6faf193aa666388518cf9933c11d7102f511c74a0fd302",
+  "normative_document_sha256": {
+    "AGENTS.md": "92a75fe11a8ef29d275d657cf35dacf3710441dcdef30d461761d13afd4ad0c9",
+    "docs/ADRs/0009-separate-data-quality-by-resolution.md": "b613cd530c73de1cdf9e91b3519a2ff6bca2eabb4ad220bd15f0aef6004ed046",
+    "docs/DATA_LEAKAGE_CONTRACT.md": "ccd7afea574c80096f2a6a05d44fabdbbf609792daafb0a6fe9297e662eaf83d",
+    "docs/PAPER_DESIGN.md": "2305bc662d1fa400df6faf193aa666388518cf9933c11d7102f511c74a0fd302",
+    "docs/RESEARCH_REFERENCES.md": "3a36e6c00c65df58e042a8716ba4cbdd795efc33adb9356fc80eb3924d22a72e",
+    "docs/SPECIFICATIONS.md": "3b58864b0455e0a68d142223228dcb8804547316f4a849721de8b7d63b1cc014",
+    "docs/standards/implementation.md": "ead3b21f1de2cd19e0bfba30946ef1a47b9e72b4089576f9cc4bcbc3272d8397",
+    "repo_manifest.yaml": "ba17e716f73b8ef82c1e3c0309911572ec8ca2662725d023b1c48a4a393a1d4f"
+  },
+  "v1_terminal_evidence": {
+    "manifest": "configs/paper/sparse_jepa/v1-evidence-final.json",
+    "manifest_sha256": "24bf983669df9b699abf2b7193d5b42dd464bec08b4993fd88a4916ae6b37585",
+    "original_design_freeze_sha256": "b923be86834795d464537221a75c05c6506c0f2e9c40893af721b93890635a83",
+    "safe_default_receipt_sha256": "08a6fbf23bebbfc1fe4cc4ab13909c584fbbdd5b926c1b8601cd689a7573bc98",
+    "status": "BLOCKED",
+    "eligible_instruments": 62
+  },
+  "conceptual_changes_from_v1": [
+    "formation completeness is daily-resolution rather than exact-minute-session",
+    "representation-session completeness is 15-minute-token-resolved",
+    "TCA retains strict minute-level execution-window completeness",
+    "missing provider minute aggregates are not automatically interpreted as zero market activity"
+  ],
+  "provider_contract": {
+    "provider": "alpaca",
+    "feed": "sip",
+    "adjustment": "raw",
+    "timezone": "America/New_York",
+    "daily_timeframe": "1Day",
+    "minute_timeframe": "1Min",
+    "minute_absence_interpretation": "not_proof_of_zero_activity_or_volume",
+    "sources": [
+      "https://docs.alpaca.markets/us/docs/market-data-faq",
+      "https://docs.alpaca.markets/us/v1.4.2/reference/stockbars",
+      "https://docs.alpaca.markets/us/docs/real-time-stock-pricing-data"
+    ]
+  },
+  "quality_hierarchy": {
+    "formation": {
+      "resolution": "provider_native_daily",
+      "period": ["2021-01-04", "2021-12-31"],
+      "minimum_expected_session_completeness": 0.95,
+      "early_close_daily_observation_is_eligible": true
+    },
+    "representation": {
+      "resolution": "fixed_15_minute_tokens",
+      "standard_session_intervals": 26,
+      "minimum_observed_provider_bars_per_token": 2,
+      "aggregation": "observed_provider_bars_only",
+      "realized_volatility": "sqrt_sum_squared_consecutive_observed_close_log_returns",
+      "gap_return_elapsed_time_normalization": false,
+      "requires_all_primary_tokens": true,
+      "early_closes_in_primary": false
+    },
+    "execution": {
+      "resolution": "exact_minutes",
+      "window_start_inclusive": "10:30",
+      "window_end_exclusive": "15:30",
+      "required_minute_count": 300,
+      "imputation": "prohibited"
+    },
+    "missing_minute_policy": "never_insert_zero_fill_or_interpolate",
+    "quality_fields": [
+      "daily_valid",
+      "minute_exact_full_session",
+      "token_valid_full_session",
+      "tca_window_exact",
+      "early_close",
+      "provider_gap_count",
+      "observed_minute_count",
+      "valid_token_count",
+      "invalid_token_reason"
+    ]
+  },
+  "universe": {
+    "candidate_count": 505,
+    "size": 100,
+    "membership_as_of": "2021-01-04",
+    "security_type": "ordinary_or_common_stock",
+    "minimum_median_daily_price": 5.0,
+    "minimum_median_daily_dollar_volume_exclusive": 0.0,
+    "ranking": ["median_daily_dollar_volume_desc", "instrument_id_asc"],
+    "ranking_known_after": "2021-12-31",
+    "survivor_replacement": false,
+    "spy_is_input_not_member": true
+  },
+  "research_hierarchy": [
+    "representation_accessibility",
+    "information_retention",
+    "supervised_forecast_value",
+    "execution_decision_value"
+  ],
+  "primary_geometries": {
+    "dense_gaussian": {"link": "identity", "p": 2.0, "mu": 0.0, "sigma": 1.0, "target_mean": 0.0, "target_second_moment": 1.0000000000000002, "target_rms": 1.0, "target_zero_fraction": 0.0},
+    "sparse_rectified_gaussian": {"link": "rep_relu", "p": 2.0, "mu": -0.6744897501960817, "sigma": 1.0, "target_mean": 0.14915413513508663, "target_second_moment": 0.14939706465202282, "target_rms": 0.3865191646633098, "target_zero_fraction": 0.75, "normalization": "derived_rectified_rms"}
+  },
+  "appendix_geometries": {
+    "sparse_rectified_laplace": {"p": 1.0, "mu": -0.49012907173427356, "sigma": 0.7071067811865476, "target_zero_fraction": 0.75},
+    "rectified_gaussian_zero_fractions": [0.5, 0.75, 0.875]
+  },
+  "representation": {
+    "observed_features": 18,
+    "encoder_feature_positions_one_based": [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 16, 17, 18],
+    "conditioning_feature_positions_one_based": [8, 12, 13, 14, 15],
+    "latent_dimension": 128,
+    "context_length": 8,
+    "horizons": [1, 2, 4, 8],
+    "predictor_family": "mlp",
+    "rdm_lambda_candidates": [0.1, 1.0, 10.0],
+    "rdm_lambda_selection_fold": "fold-1",
+    "rdm_lambda_selection_seed": 13,
+    "seeds": [13, 29, 47]
+  },
+  "folds": [
+    {"id": "fold-1", "train": ["2022-01-03", "2023-12-29"], "validation": ["2024-01-02", "2024-03-28"], "test": ["2024-04-01", "2024-06-28"]},
+    {"id": "fold-2", "train": ["2022-01-03", "2024-06-28"], "validation": ["2024-07-01", "2024-09-30"], "test": ["2024-10-01", "2024-12-31"]},
+    {"id": "fold-3", "train": ["2022-01-03", "2024-12-31"], "validation": ["2025-01-02", "2025-06-30"], "test": ["2025-07-01", "2025-12-31"]}
+  ],
+  "lightgbm": {"num_leaves": [15, 31], "min_child_samples": [50, 200], "reg_lambda": [1.0, 10.0], "learning_rate": 0.03, "max_rounds": 2000, "early_stopping_rounds": 100, "primary_targets": ["remaining_volume_log_residual", "conditional_cumulative_curve"]},
+  "confirmatory_contrasts": [
+    "representation:sparse-vs-dense:affine-normalized-latent-error",
+    "forecast:sparse-vs-dense:log-remaining-volume-mae",
+    "forecast:sparse-vs-dense:conditional-curve-error",
+    "forecast:sparse-vs-raw:log-remaining-volume-mae",
+    "forecast:sparse-vs-raw:conditional-curve-error"
+  ],
+  "inference": {"multiple_testing": "holm", "regimes": "exploratory", "bootstrap": {"estimator": "fold_stratified_moving_block_on_paired_date_means", "primary_block_dates": 5, "sensitivity_block_dates": [1, 10], "repetitions": 10000, "confidence": 0.95}},
+  "execution": {
+    "universe_size": 30,
+    "window": ["10:30", "15:30"],
+    "quantity_fraction_adv20": 0.03,
+    "planned_participation_rate": 0.1,
+    "hard_participation_rate": 0.1,
+    "risk_aversion": 0.0,
+    "tracking_penalty": 0.0,
+    "forecast_update_minutes": 15,
+    "fill_minutes": 1,
+    "half_spread_arrival_fraction": 0.00005,
+    "temporary_impact_at_full_participation": 0.001,
+    "oracle": "continuous_realized_future_volume_allocation_under_matched_constraints",
+    "normalized_allocation_regret": "(C_model-C_oracle)/max(C_oracle,epsilon)"
+  },
+  "main_and_appendix": {"main_rows": ["ewma", "raw", "untrained_neural", "dense", "sparse"], "main_representation_runs": 18, "maximum_representation_runs": 29, "laplace": "appendix_only", "sparsity_sweep": "appendix_only", "seed_ensemble": "appendix_only", "difficulty_adaptation": "future_only"},
+  "time_identities": ["training_cutoff", "market_information_as_of", "feature_history_end"],
+  "formation_evidence": {
+    "status": "COMPLETE",
+    "daily_corpus_sha256": "cc0dce538534bf18f90d67bae42ad422bbd85a0c43b9642a7135826238e2fc35",
+    "daily_receipt_sha256": "ed7b6e2cec9fe1db15a99dc961b1d5eab4f767f0c9faadb15ee7cff44ec056fa",
+    "candidate_table_sha256": "812597c1d11f0be0204528090279a8d9355792e0b7a0066473b36f2a0c6b0d31",
+    "exclusion_receipt_sha256": "f20c0bc74b302183ac1c1d48dd1cf38eba403a4491315294fbccb404140f373a",
+    "universe_manifest_sha256": "3bf94aad6efd0a9ab1d8e39c147a5cce26dbb3584cb055af7de86698e8704248",
+    "session_quality_sha256": "9adab8392ea47a3859eee46d7bfe0a95473c5c3d9ea37e8ee3e0975d6b97f133",
+    "session_quality_receipt_sha256": "e7f53d052abbfb2396804afbe9d72bdfd9897d94d5bf9b7926c9b65541680576",
+    "candidate_comparison_sha256": "771903ed8ac9b65f24bbfff25a9cb002fd6d832e5463186fa5b78b1481e218b3",
+    "diagnostics_manifest_sha256": "cb92c57a416977a12adec038a8630cdf5cbcc9d94742c59b283c8d861d2a31e0",
+    "target_plan_sha256": "d1d3565d678d8fbccc5f890297f8913f428d6d150bd8b0e036032f8df2b57146",
+    "formation_report_sha256": "30feecdf5c9d459786f2a09325290bcd7681b2737069d8d9faa743fd51a6fbd3",
+    "candidate_count": 505,
+    "daily_eligible_count": 497,
+    "frozen_universe_count": 100,
+    "selected_token_bands": {"high": 99, "medium": 1, "low": 0},
+    "terminal_status": "AWAITING V2 FORMATION APPROVAL"
+  },
+  "formation_data_status": "COMPLETE_AWAITING_APPROVAL",
+  "target_data_status": "NOT RUN",
+  "parameter_selection_receipt": "NOT RUN",
+  "historical_empirical_status": "NOT RUN"
+}

@@ -1,5 +1,39 @@
 # Implementation log
 
+## 2026-09-06: Propagate sparse-JEPA v2 quality into the historical corpus path
+
+- Applied `resolution-aware-v2` from the authoritative sequence configuration to target validation, stock and SPY sessions, causal seasonal histories, sequence records, and manifests.
+- Made stored symbols session-active and fail-closed against sourced stable-instrument intervals instead of copying the formation symbol.
+- Preserved per-token observed-bar and provider-gap counts so the two-observation computability floor remains distinguishable from near-complete tokens.
+- Restored the original v1 design-freeze bytes and retained its later safe-default and terminal receipts as separately named self-contained artifacts; v1 loading no longer requires Git history.
+- Canonicalized line endings only when hashing Git-tracked normative text, preventing Windows/Linux checkout conversion from changing protocol identity while retaining byte-exact artifact receipts.
+- Kept target acquisition, historical model fitting, locked-test evaluation, and historical TCA `NOT RUN`.
+
+## Sparse-JEPA empirical corpus gate — 2026-09-05
+
+- Verified that GitHub squash commit `0c9b25ee70611ca7c1c98de070a3f293f27ca3d7` has the same tree as accepted PR #2 head `22963d351d5e0b195249662d9115f0b3f6b0ca0c`.
+- Classified the merged design-freeze hash mismatch as a protocol-preserving implementation defect. Rebound `sparse-jepa-v1` before empirical inspection to the accepted tree, all six YAML files, and all normative documents, and added an enforced checksum sidecar.
+- Enabled only the separately authorized network stage. Historical training and full evaluation remain disabled.
+- Added a pinned, checksummed formation-constituent source, deterministic stable share-class identities, sourced ticker intervals, a pre-request storage/request plan, and a paginated Alpaca SIP entitlement probe.
+- Corrected paper bar acquisition to request the symbol identity as of each interval and normalize retained raw-adjustment bars to the exact `America/New_York` regular-session grid before receipt validation.
+- Corrected acquisition semantics discovered on APD: nonempty but incomplete monthly bars are retained with zero validated sessions for explicit exclusion accounting, while genuinely zero-row chunks remain failed receipts and do not count as complete.
+- Corrected empty post-termination provider frames discovered on TIF so they produce schema-valid, explicit zero-row failure receipts instead of failing normalization with a missing timestamp column.
+- Replaced the formation-universe all-corpus concatenation after a measured 6.63 GiB process footprint with a fail-closed, per-instrument monthly scan. The streaming calculation preserves the original price, completeness, and dollar-volume statistics while bounding peak corpus memory.
+- Corrected the formation-completeness denominator to exclude the one predeclared 2021 early close, matching the primary 390-minute session contract. The rebuilt locked scan retained 62 of 505 candidates at the unchanged 95% threshold, still below the required universe size of 100. Classified the remaining shortfall as a Class C data limitation, rebuilt `CORPUS_QUALITY_REPORT.md`, and stopped before target acquisition, corporate-action processing, fold construction, or historical training.
+- Restored the tracked network authorization default to `false` after the separately authorized acquisition. Rebound only the operational configuration/checksum fields of the tracked freeze; the acquisition-time config hash remains preserved in every acquisition receipt and in the quality report, and no scientific field changed.
+- Recorded the initial merged-baseline result as `FAIL` (131 passed, 3 stale-freeze failures); the focused corrected gate is `PASS`. No historical model fit or test-model result was produced.
+
+## Sparse-JEPA v2 resolution correction — 2026-09-05
+
+- Preserved v1 as a blocked protocol with 62 of 505 eligible names, a 251-session corrected denominator, source-commit-bound normative hashes, and no target acquisition, historical training, test inspection, or TCA.
+- Accepted ADR 0009. V2 measures formation quality from direct SIP daily bars, representation quality from 26 fixed observed-only 15-minute tokens, and TCA quality from the exact 300 consumed minutes from 10:30 through 15:29.
+- Defined token OHLC, sum volume and trade count, volume-weighted VWAP, and observed-close realized variation without inserting, interpolating, or zero-filling absent provider minutes. Early closes remain daily-valid when observed and outside the primary 26-token sample.
+- Added v2-only configuration, acquisition, formation-statistics, resolution-quality, diagnostic, and reporting code. Provider-semantics research passed. The authorized daily request returned 126,461 rows for all 505 candidates plus SPY; 497 qualify and the top 100 are frozen.
+- Scanned the retained 45,464,276 formation minute rows with bounded per-instrument/monthly-chunk memory. The scan emitted 127,512 explicit quality identities: 124,215 token-valid sessions versus 41,040 exact full-minute sessions. The selected universe has 99 high-, one medium-, and zero low-token-completeness names under pre-count bands.
+- Confirmed SPY 2021-05-05 remains valid for all 26 representation tokens despite five missing minute aggregates and remains invalid for exact TCA. The all-505 diagnostic shows v1 eligibility materially associated with liquidity and minute activity; no diagnostic changed v2 eligibility.
+- Completed the v2 formation gate with 158 passing tests, Ruff lint and format, mypy over 125 source files, 14-area repository validation, dependency-light smoke, exact v1/v2 artifact audits, and proof that `data/paper/raw_v2` was never created. Terminal status: `AWAITING V2 FORMATION APPROVAL`.
+- Historical model training, locked-test inspection, and historical TCA remain `NOT RUN`. Target acquisition remains prohibited before the v2 formation approval gate.
+
 ## Sparse predictive-representation paper framework — 2026-09-04
 
 - Accepted ADR 0006 and added a focused paper specification covering the hypothesis, causal boundary, locked folds, artifacts, statistical method, and rejected alternatives.

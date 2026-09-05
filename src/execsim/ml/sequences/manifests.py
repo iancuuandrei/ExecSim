@@ -33,6 +33,7 @@ class SequenceManifest:
     index_files: tuple[str, ...] = ()
     partition_counts: dict[str, int] | None = None
     exclusions: tuple[dict[str, str], ...] = ()
+    quality_protocol: str = "exact-minute-v1"
 
 
 def write_sequence_manifest(
@@ -49,6 +50,7 @@ def write_sequence_manifest(
     index_files: tuple[str, ...] = (),
     partition_counts: dict[str, int] | None = None,
     exclusions: tuple[dict[str, str], ...] = (),
+    quality_protocol: str = "exact-minute-v1",
 ) -> SequenceManifest:
     """Persist source identities and train-only scaler values for one fold."""
     stable = {
@@ -65,6 +67,7 @@ def write_sequence_manifest(
         "index_files": tuple(sorted(index_files)),
         "partition_counts": partition_counts or {},
         "exclusions": exclusions,
+        "quality_protocol": quality_protocol,
     }
     manifest = SequenceManifest(
         schema_version="paper-sequence-manifest-v2",
@@ -81,6 +84,7 @@ def write_sequence_manifest(
         index_files=tuple(sorted(index_files)),
         partition_counts=partition_counts or {},
         exclusions=exclusions,
+        quality_protocol=quality_protocol,
     )
     write_json_atomic(path, asdict(manifest))
     return manifest
@@ -100,6 +104,9 @@ def sequence_arrow_schema() -> pa.Schema:
             ("raw_volume", pa.list_(pa.float64(), TOKEN_COUNT)),
             ("raw_vwap", pa.list_(pa.float64(), TOKEN_COUNT)),
             ("causal_baseline_volume", pa.list_(pa.float64(), TOKEN_COUNT)),
+            ("observed_bar_count", pa.list_(pa.int16(), TOKEN_COUNT)),
+            ("provider_gap_count", pa.int16()),
+            ("quality_protocol", pa.string()),
             ("source_sha256", pa.string()),
             ("cutoff", pa.string()),
             ("training_cutoff", pa.string()),
@@ -141,6 +148,9 @@ def write_sequence_record(record: SequenceRecord, root: Path) -> Path:
                 "raw_volume": record.raw_volume.tolist(),
                 "raw_vwap": record.raw_vwap.tolist(),
                 "causal_baseline_volume": record.causal_baseline_volume.tolist(),
+                "observed_bar_count": record.observed_bar_count.tolist(),
+                "provider_gap_count": record.provider_gap_count,
+                "quality_protocol": record.quality_protocol,
                 "source_sha256": record.source_sha256,
                 "cutoff": record.cutoff,
                 "training_cutoff": record.training_cutoff,
@@ -171,6 +181,9 @@ def read_sequence_record(path: Path) -> SequenceRecord:
         raw_volume=np.asarray(row["raw_volume"], dtype=float),
         raw_vwap=np.asarray(row["raw_vwap"], dtype=float),
         causal_baseline_volume=np.asarray(row["causal_baseline_volume"], dtype=float),
+        observed_bar_count=np.asarray(row["observed_bar_count"], dtype=np.int16),
+        provider_gap_count=int(row["provider_gap_count"]),
+        quality_protocol=row["quality_protocol"],
         source_sha256=row["source_sha256"],
         cutoff=row["cutoff"],
         training_cutoff=row["training_cutoff"],
