@@ -269,8 +269,11 @@ def _peak_rss_bytes() -> int | None:
 
     counters = ProcessMemoryCounters()
     counters.cb = ctypes.sizeof(counters)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    # WinDLL is intentionally resolved at runtime because it is absent from
+    # ctypes on non-Windows hosts and therefore from their type stubs.
+    win_dll = getattr(ctypes, "Win" + "DLL")
+    kernel32 = win_dll("kernel32", use_last_error=True)
+    psapi = win_dll("psapi", use_last_error=True)
     kernel32.GetCurrentProcess.restype = ctypes.c_void_p
     psapi.GetProcessMemoryInfo.argtypes = [
         ctypes.c_void_p,

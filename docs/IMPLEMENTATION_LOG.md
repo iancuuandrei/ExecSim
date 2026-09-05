@@ -1,5 +1,13 @@
 # Implementation log
 
+## 2026-09-06: Propagate sparse-JEPA v2 quality into the historical corpus path
+
+- Applied `resolution-aware-v2` from the authoritative sequence configuration to target validation, stock and SPY sessions, causal seasonal histories, sequence records, and manifests.
+- Made stored symbols session-active and fail-closed against sourced stable-instrument intervals instead of copying the formation symbol.
+- Preserved per-token observed-bar and provider-gap counts so the two-observation computability floor remains distinguishable from near-complete tokens.
+- Restored the original v1 design-freeze bytes and retained its later safe-default and terminal receipts as separately named self-contained artifacts; v1 loading no longer requires Git history.
+- Kept target acquisition, historical model fitting, locked-test evaluation, and historical TCA `NOT RUN`.
+
 ## Sparse-JEPA empirical corpus gate — 2026-09-05
 
 - Verified that GitHub squash commit `0c9b25ee70611ca7c1c98de070a3f293f27ca3d7` has the same tree as accepted PR #2 head `22963d351d5e0b195249662d9115f0b3f6b0ca0c`.

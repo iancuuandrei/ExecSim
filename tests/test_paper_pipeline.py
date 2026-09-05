@@ -442,13 +442,13 @@ def test_protocol_freeze_is_complete_and_checksum_bound() -> None:
     freeze = config.design_freeze
     freeze_path = config.root / "design-freeze-v1.json"
     sidecar = freeze_path.with_suffix(".sha256").read_text(encoding="utf-8").split()
+    safe_path = config.root / "safe-default-receipt-v1.json"
+    safe_sidecar = safe_path.with_suffix(".sha256").read_text(encoding="utf-8").split()
 
-    assert freeze["protocol_id"] == "sparse-jepa-v1"
-    assert freeze["pr_provenance"]["tree_match"] is True
-    assert freeze["paper_config_sha256"]
-    assert len(freeze["normative_document_sha256"]) >= 7
+    assert freeze["schema_version"] == "paper-design-freeze-v1"
     assert freeze["parameter_selection_receipt"] == "NOT RUN"
     assert sidecar == [file_sha256(freeze_path), freeze_path.name]
+    assert safe_sidecar == [file_sha256(safe_path), safe_path.name]
 
 
 def test_locked_test_parameter_freeze_requires_the_exact_model_matrix(

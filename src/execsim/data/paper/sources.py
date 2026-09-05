@@ -143,8 +143,9 @@ def acquire_constituent_identity_sources(
         "snapshot_sha256": file_sha256(snapshot_output),
         "ticker_history_sha256": file_sha256(ticker_history_output),
         "classification_note": (
-            "The source enumerates S&P 500 company share classes; retained rows are classified "
-            "as ordinary common stock for the paper eligibility field."
+            "The source enumerates S&P 500 share-class rows. ordinary_common_stock is retained "
+            "as the protocol eligibility label; it is not an independently sourced legal "
+            "security classification."
         ),
         "identity_note": (
             "Stable IDs combine SEC CIK and the formation share-class symbol. Later symbols are "

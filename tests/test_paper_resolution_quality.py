@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from execsim.data.paper.resolution_quality import (
     validate_daily_observation,
 )
 from execsim.ml.paper.configs import load_paper_config
+from execsim.ml.paper.orchestration import validate_data_stage
 from execsim.ml.sequences.builder import build_session_sequence
 
 
@@ -73,6 +75,21 @@ def test_exact_and_sparse_minute_sessions_have_separate_quality() -> None:
     assert not sparse_quality.tca_window_exact
     assert sparse_quality.provider_gap_count == 5
     assert sparse_quality.valid_token_count == 26
+    assert sparse_quality.token_observed_bar_counts == (
+        14,
+        14,
+        15,
+        15,
+        15,
+        14,
+        *([15] * 7),
+        14,
+        *([15] * 11),
+        14,
+    )
+    assert sparse_quality.token_provider_gap_counts == tuple(
+        15 - value for value in sparse_quality.token_observed_bar_counts
+    )
 
 
 @pytest.mark.parametrize(
@@ -180,6 +197,64 @@ def test_spy_uses_identical_token_quality_contract() -> None:
 
     assert assess_session_resolution_quality(stock).token_valid_full_session
     assert assess_session_resolution_quality(spy).token_valid_full_session
+
+
+def test_v2_target_validation_accepts_token_valid_gaps_and_checks_session_symbol(
+    tmp_path: Path,
+) -> None:
+    loaded = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
+    universe_path = tmp_path / "universe.json"
+    write_json_atomic(
+        universe_path,
+        {
+            "protocol_id": "sparse-jepa-v2",
+            "members": [{"instrument_id": "id-aapl", "formation_symbol": "AAPL"}],
+            "symbol_history": [
+                {
+                    "instrument_id": "id-aapl",
+                    "symbol": "AAPL",
+                    "start": "2021-01-01",
+                    "end": "2025-12-31",
+                    "source": "fixture",
+                },
+                {
+                    "instrument_id": "benchmark-spy",
+                    "symbol": "SPY",
+                    "start": "2021-01-01",
+                    "end": "2025-12-31",
+                    "source": "fixture",
+                },
+            ],
+        },
+    )
+    sections = {
+        **loaded.sections,
+        "data": {**loaded.data, "universe_manifest": str(universe_path)},
+    }
+    config = replace(loaded, sections=sections)
+    spy = _minute_session("SPY").drop(index=[1, 18, 80, 200, 388])
+    spy["instrument_id"] = "benchmark-spy"
+    corpus = pd.concat(
+        [
+            _minute_session().drop(index=[1, 18, 80, 200, 388]),
+            spy,
+        ],
+        ignore_index=True,
+    )
+    corpus_path = tmp_path / "target.parquet"
+    corpus.to_parquet(corpus_path, index=False)
+
+    accepted = validate_data_stage(config, corpus_path)
+    assert accepted["valid"] is True
+    assert accepted["quality_protocol"] == "resolution-aware-v2"
+    assert accepted["valid_sessions"] == 2
+
+    incompatible = corpus.copy()
+    incompatible.loc[incompatible["instrument_id"] == "id-aapl", "symbol"] = "META"
+    incompatible.to_parquet(corpus_path, index=False)
+    rejected = validate_data_stage(config, corpus_path)
+    assert rejected["valid"] is False
+    assert "does not match sourced symbol" in rejected["invalid_sessions"][0]["errors"][0]
 
 
 def test_daily_quality_accepts_early_close_as_an_observed_trading_day() -> None:

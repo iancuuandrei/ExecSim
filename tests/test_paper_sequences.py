@@ -145,6 +145,17 @@ def test_multisession_multifold_corpus_builder_includes_spy_and_records_corrupti
         f"{malformed['timestamp'].iloc[0].date()} 16:00", tz="America/New_York"
     )
     bars = pd.concat(frames, ignore_index=True)
+    sparse_date = dates[6]
+    sparse_mask = (bars["instrument_id"] == "asset-0") & (
+        pd.to_datetime(bars["timestamp"]).dt.date == sparse_date
+    )
+    sparse_indexes = bars.loc[sparse_mask].index[[1, 18, 80, 200, 388]]
+    bars = bars.drop(index=sparse_indexes).reset_index(drop=True)
+    rename_date = date(2024, 4, 1)
+    renamed = (bars["instrument_id"] == "asset-1") & (
+        pd.to_datetime(bars["timestamp"]).dt.date >= rename_date
+    )
+    bars.loc[renamed, "symbol"] = "N1"
     actions = pd.DataFrame(
         {
             "instrument_id": ["asset-1"],
@@ -155,8 +166,32 @@ def test_multisession_multifold_corpus_builder_includes_spy_and_records_corrupti
         }
     )
     members = tuple(
-        {"instrument_id": instrument_id, "symbol": symbol}
+        {"instrument_id": instrument_id, "formation_symbol": symbol}
         for instrument_id, symbol in instruments[:-1]
+    )
+    symbol_history = (
+        *(
+            {
+                "instrument_id": instrument_id,
+                "symbol": symbol,
+                "start": "2021-01-04",
+                "end": "2025-12-31",
+            }
+            for instrument_id, symbol in instruments
+            if instrument_id != "asset-1"
+        ),
+        {
+            "instrument_id": "asset-1",
+            "symbol": "S1",
+            "start": "2021-01-04",
+            "end": "2024-03-31",
+        },
+        {
+            "instrument_id": "asset-1",
+            "symbol": "N1",
+            "start": "2024-04-01",
+            "end": "2025-12-31",
+        },
     )
     manifests = []
     for fold_id in ("fold-1", "fold-2"):
@@ -172,6 +207,8 @@ def test_multisession_multifold_corpus_builder_includes_spy_and_records_corrupti
                 config_hash="c" * 64,
                 spy_instrument_id="benchmark-spy",
                 data_classification="synthetic_fixture",
+                quality_protocol="resolution-aware-v2",
+                symbol_history=symbol_history,
             )
         )
     first_payload = read_json(tmp_path / "sequences" / "fold-1" / "sequence-manifest.json")
@@ -183,9 +220,35 @@ def test_multisession_multifold_corpus_builder_includes_spy_and_records_corrupti
 
     assert len(dates) == 40
     assert len(manifests) == 2
+    assert first_payload["quality_protocol"] == "resolution-aware-v2"
     assert len(train) == 2 * first_payload["partition_counts"]["train"]
     assert any(item["instrument_id"] == "asset-3" for item in first_payload["exclusions"])
     assert all("benchmark-spy" not in path for path in first_payload["sequence_files"])
+    sparse_file = next(
+        path
+        for path in first_payload["sequence_files"]
+        if "asset-0" in path and sparse_date.isoformat() in path
+    )
+    sparse_record = read_sequence_record(tmp_path / "sequences" / "fold-1" / sparse_file)
+    assert sparse_record.provider_gap_count == 5
+    assert sparse_record.observed_bar_count.tolist() == [
+        14,
+        14,
+        15,
+        15,
+        15,
+        14,
+        *([15] * 7),
+        14,
+        *([15] * 11),
+        14,
+    ]
+    renamed_file = next(
+        path
+        for path in first_payload["sequence_files"]
+        if "asset-1" in path and rename_date.isoformat() in path
+    )
+    assert read_sequence_record(tmp_path / "sequences" / "fold-1" / renamed_file).symbol == "N1"
 
     _run_fixture_pipeline(
         tmp_path,

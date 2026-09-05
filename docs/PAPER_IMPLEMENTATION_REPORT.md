@@ -63,14 +63,14 @@ privileged action, target-period acquisition, requires new explicit approval.
 
 | Gate | Result |
 |---|---|
-| Full repository pytest | **PASS** - 158 tests in 474.21 s |
-| V2 focused resolution/formation/report suite | **PASS** - 17 tests |
+| Full repository pytest | **PASS** - 159 tests in 479.10 s |
+| V2 focused resolution/formation/report suite | **PASS** - 18 tests |
 | Ruff lint | **PASS** |
 | Ruff format | **PASS** - 180 files |
 | mypy | **PASS** - 125 source files |
 | Repository-context validation | **PASS** - 14 areas, manifest hash `e46e53dedff85f56c0888a42ba73a56d6462790fcbf1a3b8cfb8d42464a40de2` |
 | Dependency-light smoke | **PASS** - 2 tests |
-| V1 immutable artifact audit | **PASS** - five artifact hashes plus terminal manifest |
+| V1 immutable artifact audit | **PASS** - original freeze, separately named safe-default receipt, five evidence hashes, and terminal manifest; no Git object database required |
 | V2 formation freeze artifact audit | **PASS** - eleven evidence hashes and 100 unique members |
 | V2 target corpus path | **NOT CREATED** |
 
@@ -142,7 +142,7 @@ constituent snapshot + formation bars
   -> formation statistics, eligibility, and exclusion receipts
   -> frozen 100-stock universe with stable instrument and sourced symbol history
   -> validated stock + SPY minute corpus and point-in-time action manifest
-  -> exact-grid fold sequence stores (18 observed = 13 dynamic + 5 conditioning)
+  -> v2 token-valid fold sequence stores with observed-bar diagnostics (18 observed = 13 dynamic + 5 conditioning)
   -> TRAIN-only normalizers and deterministic sample indexes
   -> common-lambda selection and streaming dense/sparse JEPA training
   -> frozen accessibility and observable probes

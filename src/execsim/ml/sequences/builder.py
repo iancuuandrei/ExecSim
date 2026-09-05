@@ -121,6 +121,13 @@ def build_session_sequence(
         raw_volume=tokens["volume"].to_numpy(dtype=float),
         raw_vwap=tokens["vwap"].to_numpy(dtype=float),
         causal_baseline_volume=baseline.volume_profile.astype(float),
+        observed_bar_count=(
+            tokens["observed_bar_count"].to_numpy(dtype=np.int16)
+            if "observed_bar_count" in tokens
+            else np.full(TOKEN_COUNT, 15, dtype=np.int16)
+        ),
+        provider_gap_count=390 - len(ordered),
+        quality_protocol=quality_protocol,
         source_sha256=source_sha256,
         cutoff=cutoff,
         training_cutoff=training_cutoff or cutoff,

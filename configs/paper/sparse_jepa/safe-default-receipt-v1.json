@@ -1,0 +1,89 @@
+{
+  "schema_version": "paper-design-freeze-v2",
+  "protocol_id": "sparse-jepa-v1",
+  "protocol_version": 1,
+  "status": "PROTOCOL_FROZEN",
+  "frozen_at_utc": "2026-09-05T15:48:11.1215079Z",
+  "git_commit": "0c9b25ee70611ca7c1c98de070a3f293f27ca3d7",
+  "paper_config_sha256": "d1c112176b1b0db0179dcacd6d55b3cb9b229d5f202029d96bd364392817c230",
+  "source_specification": "docs/PAPER_DESIGN.md",
+  "source_specification_sha256": "d86e6b08e114b1e169e1cfac2ec48e953c836c5cb8792248c4242980b3a02209",
+  "normative_document_sha256": {
+    "AGENTS.md": "a21f4c09212229c89a617903941148cec27add25332a84fd04464855cb1385e2",
+    "docs/ADRs/0008-redirect-paper-to-representation-accessibility.md": "83c60e040f22a13bb89dc8bcb0126991c7eedfefb181565f2795092f134528e2",
+    "docs/DATA_LEAKAGE_CONTRACT.md": "11116172080353c7d947bf09c5a245716245aec46723a1d8718cf46efc59b73c",
+    "docs/PAPER_DESIGN.md": "d86e6b08e114b1e169e1cfac2ec48e953c836c5cb8792248c4242980b3a02209",
+    "docs/SPECIFICATIONS.md": "80618354d9d043509704db22085c12fddf560f792123f250f1f14de4145665af",
+    "docs/standards/implementation.md": "d9c1d5feb3b21f64ffeb58855c28789138f4e91fd187c8555134328f8197c8ac",
+    "repo_manifest.yaml": "a16d42b9f0536017b655f27035da149a909957adf38f7b4f6556c96a7aa40dc9"
+  },
+  "pr_provenance": {
+    "repository": "iancuuandrei/ExecSim",
+    "pull_request": 2,
+    "accepted_head": "22963d351d5e0b195249662d9115f0b3f6b0ca0c",
+    "accepted_tree": "a5fbb3177596b42e27225e3cf1b23e991cfd79a2",
+    "merged_main": "0c9b25ee70611ca7c1c98de070a3f293f27ca3d7",
+    "merged_tree": "a5fbb3177596b42e27225e3cf1b23e991cfd79a2",
+    "tree_match": true
+  },
+  "research_hierarchy": [
+    "representation_accessibility",
+    "information_retention",
+    "supervised_forecast_value",
+    "execution_decision_value"
+  ],
+  "primary_geometries": {
+    "dense_gaussian": {"link": "identity", "p": 2.0, "mu": 0.0, "sigma": 1.0, "target_mean": 0.0, "target_second_moment": 1.0000000000000002, "target_rms": 1.0, "target_zero_fraction": 0.0},
+    "sparse_rectified_gaussian": {"link": "rep_relu", "p": 2.0, "mu": -0.6744897501960817, "sigma": 1.0, "target_mean": 0.14915413513508663, "target_second_moment": 0.14939706465202282, "target_rms": 0.3865191646633098, "target_zero_fraction": 0.75, "normalization": "derived_rectified_rms"}
+  },
+  "appendix_geometries": {
+    "sparse_rectified_laplace": {"p": 1.0, "mu": -0.49012907173427356, "sigma": 0.7071067811865476, "target_zero_fraction": 0.75},
+    "rectified_gaussian_zero_fractions": [0.5, 0.75, 0.875]
+  },
+  "representation": {
+    "observed_features": 18,
+    "encoder_feature_positions_one_based": [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 16, 17, 18],
+    "conditioning_feature_positions_one_based": [8, 12, 13, 14, 15],
+    "latent_dimension": 128,
+    "context_length": 8,
+    "horizons": [1, 2, 4, 8],
+    "predictor_family": "mlp",
+    "rdm_lambda_candidates": [0.1, 1.0, 10.0],
+    "rdm_lambda_selection_fold": "fold-1",
+    "rdm_lambda_selection_seed": 13,
+    "seeds": [13, 29, 47]
+  },
+  "folds": [
+    {"id": "fold-1", "train": ["2022-01-03", "2023-12-29"], "validation": ["2024-01-02", "2024-03-28"], "test": ["2024-04-01", "2024-06-28"]},
+    {"id": "fold-2", "train": ["2022-01-03", "2024-06-28"], "validation": ["2024-07-01", "2024-09-30"], "test": ["2024-10-01", "2024-12-31"]},
+    {"id": "fold-3", "train": ["2022-01-03", "2024-12-31"], "validation": ["2025-01-02", "2025-06-30"], "test": ["2025-07-01", "2025-12-31"]}
+  ],
+  "lightgbm": {"num_leaves": [15, 31], "min_child_samples": [50, 200], "reg_lambda": [1.0, 10.0], "learning_rate": 0.03, "max_rounds": 2000, "early_stopping_rounds": 100, "primary_targets": ["remaining_volume_log_residual", "conditional_cumulative_curve"]},
+  "confirmatory_contrasts": [
+    "representation:sparse-vs-dense:affine-normalized-latent-error",
+    "forecast:sparse-vs-dense:log-remaining-volume-mae",
+    "forecast:sparse-vs-dense:conditional-curve-error",
+    "forecast:sparse-vs-raw:log-remaining-volume-mae",
+    "forecast:sparse-vs-raw:conditional-curve-error"
+  ],
+  "inference": {"multiple_testing": "holm", "regimes": "exploratory", "bootstrap": {"estimator": "fold_stratified_moving_block_on_paired_date_means", "primary_block_dates": 5, "sensitivity_block_dates": [1, 10], "repetitions": 10000, "confidence": 0.95}},
+  "execution": {
+    "universe_size": 30,
+    "window": ["10:30", "15:30"],
+    "quantity_fraction_adv20": 0.03,
+    "planned_participation_rate": 0.1,
+    "hard_participation_rate": 0.1,
+    "risk_aversion": 0.0,
+    "tracking_penalty": 0.0,
+    "forecast_update_minutes": 15,
+    "fill_minutes": 1,
+    "half_spread_arrival_fraction": 0.00005,
+    "temporary_impact_at_full_participation": 0.001,
+    "oracle": "continuous_realized_future_volume_allocation_under_matched_constraints",
+    "normalized_allocation_regret": "(C_model-C_oracle)/max(C_oracle,epsilon)"
+  },
+  "main_and_appendix": {"main_rows": ["ewma", "raw", "untrained_neural", "dense", "sparse"], "main_representation_runs": 18, "maximum_representation_runs": 29, "laplace": "appendix_only", "sparsity_sweep": "appendix_only", "seed_ensemble": "appendix_only", "difficulty_adaptation": "future_only"},
+  "time_identities": ["training_cutoff", "market_information_as_of", "feature_history_end"],
+  "parameter_selection_receipt": "NOT RUN",
+  "historical_empirical_status": "NOT RUN"
+}

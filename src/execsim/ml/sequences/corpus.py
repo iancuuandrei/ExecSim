@@ -13,6 +13,10 @@ import pandas as pd
 from execsim.data.paper.corporate_actions import apply_point_in_time_split_adjustment
 from execsim.data.paper.manifests import file_sha256
 from execsim.data.paper.partitions import fold_training_cutoff, resolve_fold_partition
+from execsim.data.paper.resolution_quality import (
+    aggregate_observed_tokens,
+    assess_session_resolution_quality,
+)
 from execsim.data.paper.validation import validate_exact_xnys_session
 from execsim.ml.sequences.builder import _aggregate_tokens, build_session_sequence
 from execsim.ml.sequences.index import build_sample_index, write_sample_index
@@ -37,6 +41,8 @@ def build_fold_sequence_corpus(
     config_hash: str,
     spy_instrument_id: str,
     data_classification: str,
+    quality_protocol: str = "exact-minute-v1",
+    symbol_history: tuple[dict[str, Any], ...] = (),
 ) -> SequenceManifest:
     """Build, normalize, index, and manifest every valid session in one fold."""
     cutoff = fold_training_cutoff(fold_id)
@@ -50,14 +56,21 @@ def build_fold_sequence_corpus(
     missing = set(instruments).difference(available)
     if missing:
         raise ValueError(f"Universe instruments missing from raw corpus: {sorted(missing)}")
-    spy_sessions = _validated_sessions(bars, spy_instrument_id)
+    if data_classification != "synthetic_fixture" and not symbol_history:
+        raise ValueError("Historical sequence builds require sourced symbol history.")
+    spy_sessions = _validated_sessions(bars, spy_instrument_id, quality_protocol=quality_protocol)
     records: list[tuple[str, SequenceRecord]] = []
     exclusions: list[dict[str, str]] = []
     raw_hashes: list[str] = []
     for member in universe_members:
         instrument_id = str(member["instrument_id"])
-        symbol = str(member["symbol"])
-        sessions = _validated_sessions(bars, instrument_id, fold_id=fold_id, exclusions=exclusions)
+        sessions = _validated_sessions(
+            bars,
+            instrument_id,
+            fold_id=fold_id,
+            exclusions=exclusions,
+            quality_protocol=quality_protocol,
+        )
         history: list[tuple[date, pd.DataFrame]] = []
         for session_date, session in sessions:
             try:
@@ -80,6 +93,20 @@ def build_fold_sequence_corpus(
                 )
                 history.append((session_date, session))
                 continue
+            symbol = _session_symbol(session)
+            if symbol_history:
+                _verify_sourced_symbol(
+                    symbol_history,
+                    instrument_id=instrument_id,
+                    session_date=session_date,
+                    observed_symbol=symbol,
+                )
+                _verify_sourced_symbol(
+                    symbol_history,
+                    instrument_id=spy_instrument_id,
+                    session_date=session_date,
+                    observed_symbol=_session_symbol(prior_spy_session),
+                )
             record_cutoff = prior[-1][0]
             adjusted = _adjust_for_cutoff(
                 session,
@@ -100,8 +127,8 @@ def build_fold_sequence_corpus(
                 for prior_date, prior_session in prior
             ]
             previous_close = float(adjusted_prior[-1][1]["close"].iloc[-1])
-            stock_seasonal = _seasonal_frame(adjusted_prior)
-            spy_seasonal = _seasonal_frame(spy_prior)
+            stock_seasonal = _seasonal_frame(adjusted_prior, quality_protocol=quality_protocol)
+            spy_seasonal = _seasonal_frame(spy_prior, quality_protocol=quality_protocol)
             source_hash = _frame_hash(session)
             record = build_session_sequence(
                 adjusted,
@@ -115,6 +142,7 @@ def build_fold_sequence_corpus(
                 previous_close=previous_close,
                 data_classification=data_classification,
                 training_cutoff=cutoff.isoformat(),
+                quality_protocol=quality_protocol,
             )
             records.append((partition, record))
             raw_hashes.append(source_hash)
@@ -162,6 +190,7 @@ def build_fold_sequence_corpus(
         index_files=tuple(index_files),
         partition_counts=counts,
         exclusions=tuple(exclusions),
+        quality_protocol=quality_protocol,
     )
 
 
@@ -179,6 +208,7 @@ def _validated_sessions(
     *,
     fold_id: str = "unresolved",
     exclusions: list[dict[str, str]] | None = None,
+    quality_protocol: str = "exact-minute-v1",
 ) -> list[tuple[date, pd.DataFrame]]:
     selected = bars.loc[bars["instrument_id"].astype(str) == instrument_id].copy()
     if selected.empty:
@@ -188,7 +218,14 @@ def _validated_sessions(
     sessions: list[tuple[date, pd.DataFrame]] = []
     for session_date, session in selected.groupby(local_dates, sort=True):
         session = session.sort_values("timestamp", kind="stable").reset_index(drop=True)
-        errors = validate_exact_xnys_session(session)
+        errors: tuple[str, ...]
+        if quality_protocol == "resolution-aware-v2":
+            quality = assess_session_resolution_quality(session)
+            errors = () if quality.token_valid_full_session else (quality.invalid_token_reason,)
+        elif quality_protocol == "exact-minute-v1":
+            errors = validate_exact_xnys_session(session)
+        else:
+            raise ValueError(f"Unknown paper quality protocol: {quality_protocol}")
         if errors:
             if exclusions is not None:
                 exclusions.append(
@@ -204,10 +241,16 @@ def _validated_sessions(
     return sessions
 
 
-def _seasonal_frame(history: list[tuple[date, pd.DataFrame]]) -> pd.DataFrame:
+def _seasonal_frame(
+    history: list[tuple[date, pd.DataFrame]], *, quality_protocol: str
+) -> pd.DataFrame:
     rows = []
     for session_date, session in history[-20:]:
-        tokens = _aggregate_tokens(session)
+        tokens = (
+            aggregate_observed_tokens(session)
+            if quality_protocol == "resolution-aware-v2"
+            else _aggregate_tokens(session)
+        )
         for bucket_index, token in enumerate(tokens.itertuples(index=False)):
             rows.append(
                 {
@@ -219,6 +262,39 @@ def _seasonal_frame(history: list[tuple[date, pd.DataFrame]]) -> pd.DataFrame:
                 }
             )
     return pd.DataFrame(rows)
+
+
+def _session_symbol(session: pd.DataFrame) -> str:
+    symbols = tuple(session["symbol"].astype(str).str.upper().drop_duplicates())
+    if len(symbols) != 1 or not symbols[0]:
+        raise ValueError("Each sequence session must contain one non-empty observed symbol.")
+    return symbols[0]
+
+
+def _verify_sourced_symbol(
+    symbol_history: tuple[dict[str, Any], ...],
+    *,
+    instrument_id: str,
+    session_date: date,
+    observed_symbol: str,
+) -> None:
+    matches = [
+        str(item["symbol"]).upper()
+        for item in symbol_history
+        if str(item["instrument_id"]) == instrument_id
+        and date.fromisoformat(str(item["start"])[:10])
+        <= session_date
+        <= date.fromisoformat(str(item["end"])[:10])
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"BLOCKED: no unique sourced symbol for {instrument_id} on {session_date}."
+        )
+    if observed_symbol != matches[0]:
+        raise ValueError(
+            f"Observed symbol {observed_symbol} does not match sourced symbol {matches[0]} "
+            f"for {instrument_id} on {session_date}."
+        )
 
 
 def _adjust_for_cutoff(

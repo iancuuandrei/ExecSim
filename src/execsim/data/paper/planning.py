@@ -25,6 +25,8 @@ def build_acquisition_plan(
     spy_instrument_id: str,
     output_directory: Path,
     paper_config_hash: str,
+    protocol_id: str = "sparse-jepa-v1",
+    formation_frequency: str = "1min",
 ) -> dict[str, object]:
     """Write request, row, storage, and source bounds before the first Alpaca call."""
     import exchange_calendars as xcals
@@ -39,7 +41,8 @@ def build_acquisition_plan(
     target_instruments = target_universe_size + 1
     target_months = len(monthly_chunks("planned", "PLANNED", target_start, target_end))
     target_requests_upper = target_instruments * target_months
-    formation_rows = len(formation_ids) * formation_sessions * 390
+    formation_rows_per_session = 1 if formation_frequency == "1Day" else 390
+    formation_rows = len(formation_ids) * formation_sessions * formation_rows_per_session
     target_rows = target_instruments * target_sessions * 390
     total_rows = formation_rows + target_rows
     raw_bytes_per_row = 80
@@ -48,6 +51,7 @@ def build_acquisition_plan(
     free_bytes = shutil.disk_usage(output_directory.resolve().anchor).free
     stable = {
         "schema_version": "paper-acquisition-plan-v1",
+        "protocol_id": protocol_id,
         "paper_config_hash": paper_config_hash,
         "provider": "alpaca",
         "feed": "sip",
@@ -59,6 +63,7 @@ def build_acquisition_plan(
             "end": formation_end.isoformat(),
             "candidate_instruments_including_spy": len(formation_ids),
             "expected_sessions_per_instrument": formation_sessions,
+            "frequency": formation_frequency,
             "expected_minute_rows_upper": formation_rows,
             "monthly_requests": formation_requests,
         },
@@ -133,7 +138,7 @@ def _plan_markdown(payload: dict[str, object]) -> str:
     assert isinstance(formation, dict) and isinstance(target, dict) and isinstance(storage, dict)
     gib = 1024**3
     return (
-        "# Sparse-JEPA v1 acquisition plan\n\n"
+        f"# {payload['protocol_id']} acquisition plan\n\n"
         "This plan was frozen before the first Alpaca request. Counts are upper bounds until "
         "session exclusions and the formation universe are observed.\n\n"
         "## Requests and rows\n\n"

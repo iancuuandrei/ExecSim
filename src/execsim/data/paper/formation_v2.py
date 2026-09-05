@@ -161,6 +161,7 @@ def write_v2_universe_manifest(
     """Freeze a version-separated daily-quality universe manifest."""
     if len(members) != 100 or tuple(item.rank for item in members) != tuple(range(1, 101)):
         raise ValueError("Completed v2 universe must contain ranks 1 through 100.")
+    output.parent.mkdir(parents=True, exist_ok=True)
     rows = [
         {
             "rank": item.rank,

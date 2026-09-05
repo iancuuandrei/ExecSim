@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,7 +22,7 @@ CONFIG_FILES = (
 )
 
 _FREEZE_IDENTITIES = {
-    "sparse-jepa-v1": ("design-freeze-v1.json", "paper-design-freeze-v2", 1),
+    "sparse-jepa-v1": ("design-freeze-v1.json", "paper-design-freeze-v1", 1),
     "sparse-jepa-v2": ("design-freeze-v2.json", "paper-design-freeze-v3", 2),
 }
 
@@ -142,12 +140,7 @@ def _validate_design_freeze(
         _, expected_schema, expected_version = _FREEZE_IDENTITIES[protocol_id]
     except KeyError as exc:
         raise ValueError(f"Unsupported paper protocol identity: {protocol_id!r}") from exc
-    if (
-        freeze.get("schema_version") != expected_schema
-        or freeze.get("protocol_id") != protocol_id
-        or freeze.get("protocol_version") != expected_version
-        or freeze.get("status") != "PROTOCOL_FROZEN"
-    ):
+    if freeze.get("schema_version") != expected_schema or freeze.get("status") != "PROTOCOL_FROZEN":
         raise ValueError("Paper design freeze identity is invalid.")
     sidecar = freeze_path.with_suffix(".sha256")
     if not sidecar.is_file():
@@ -157,7 +150,14 @@ def _validate_design_freeze(
         raise ValueError("Paper design freeze checksum sidecar is malformed.")
     if fields[0] != file_sha256(freeze_path):
         raise ValueError("Paper design freeze checksum does not match immutable bytes.")
-    if freeze.get("paper_config_sha256") != stable_hash({"sections": sections}):
+    if protocol_id == "sparse-jepa-v1":
+        _validate_archived_v1_receipts(freeze_path)
+        return
+    if (
+        freeze.get("protocol_id") != protocol_id
+        or freeze.get("protocol_version") != expected_version
+        or freeze.get("paper_config_sha256") != stable_hash({"sections": sections})
+    ):
         raise ValueError("Paper design freeze does not match the six normative YAML files.")
     repository_root = root.parents[2]
     documents = freeze.get("normative_document_sha256")
@@ -170,9 +170,7 @@ def _validate_design_freeze(
         or not isinstance(expected, str)
         or file_sha256(repository_root / relative) != expected
     ]
-    if mismatches and protocol_id == "sparse-jepa-v1":
-        _validate_archived_v1_sources(repository_root, freeze_path, freeze, mismatches)
-    elif mismatches:
+    if mismatches:
         raise ValueError(f"Paper design freeze normative document mismatch: {sorted(mismatches)}")
     specification = str(freeze.get("source_specification", ""))
     if (
@@ -182,55 +180,32 @@ def _validate_design_freeze(
         raise ValueError("Paper design freeze does not match its normative specification.")
 
 
-def _validate_archived_v1_sources(
-    repository_root: Path,
-    freeze_path: Path,
-    freeze: dict[str, Any],
-    mismatches: list[str],
-) -> None:
-    """Verify evolved v1 documents against their immutable Git source snapshot."""
+def _validate_archived_v1_receipts(freeze_path: Path) -> None:
+    """Verify self-contained v1 bytes without requiring a Git object database."""
+    safe_path = freeze_path.with_name("safe-default-receipt-v1.json")
+    safe_sidecar = safe_path.with_suffix(".sha256")
     evidence_path = freeze_path.with_name("v1-evidence-final.json")
     evidence_sidecar = evidence_path.with_suffix(".sha256")
-    if not evidence_path.is_file() or not evidence_sidecar.is_file():
-        raise ValueError(f"Archived v1 normative document mismatch: {sorted(mismatches)}")
+    if not all(
+        path.is_file() for path in (safe_path, safe_sidecar, evidence_path, evidence_sidecar)
+    ):
+        raise ValueError("Archived v1 receipts are incomplete.")
+    safe_fields = safe_sidecar.read_text(encoding="utf-8").strip().split()
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     fields = evidence_sidecar.read_text(encoding="utf-8").strip().split()
     content = dict(evidence)
     claimed_bundle_hash = content.pop("bundle_content_sha256", None)
     if (
         not isinstance(evidence, dict)
+        or safe_fields != [file_sha256(safe_path), safe_path.name]
         or fields != [file_sha256(evidence_path), evidence_path.name]
         or evidence.get("schema_version") != "paper-v1-terminal-evidence-v1"
         or evidence.get("protocol_id") != "sparse-jepa-v1"
-        or evidence.get("artifacts", {}).get("design_freeze") != file_sha256(freeze_path)
+        # This legacy field names the acquisition-time safe-default receipt.
+        or evidence.get("artifacts", {}).get("design_freeze") != file_sha256(safe_path)
         or claimed_bundle_hash != stable_hash(content)
     ):
         raise ValueError("Archived v1 terminal evidence is invalid.")
-    commit = evidence.get("normative_source_commit")
-    if not isinstance(commit, str) or len(commit) != 40:
-        raise ValueError("Archived v1 terminal evidence lacks its normative source commit.")
-    documents = freeze["normative_document_sha256"]
-    failed: list[str] = []
-    for relative in mismatches:
-        if relative.startswith(("/", "\\")) or ".." in Path(relative).parts:
-            failed.append(relative)
-            continue
-        result = subprocess.run(
-            ["git", "show", f"{commit}:{relative}"],
-            cwd=repository_root,
-            check=False,
-            capture_output=True,
-        )
-        raw = result.stdout
-        crlf = raw.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
-        expected = documents[relative]
-        if result.returncode != 0 or expected not in {
-            hashlib.sha256(raw).hexdigest(),
-            hashlib.sha256(crlf).hexdigest(),
-        }:
-            failed.append(relative)
-    if failed:
-        raise ValueError(f"Archived v1 normative source mismatch: {sorted(failed)}")
 
 
 def _validate_sections(sections: dict[str, dict[str, Any]]) -> None:
@@ -261,6 +236,11 @@ def _validate_sections(sections: dict[str, dict[str, Any]]) -> None:
         or sequence.get("context_length") != 8
     ):
         raise ValueError("Sequence and representation dimensions contradict the locked design.")
+    expected_quality_protocol = (
+        "resolution-aware-v2" if protocol_id == "sparse-jepa-v2" else "exact-minute-v1"
+    )
+    if sequence.get("quality_protocol", "exact-minute-v1") != expected_quality_protocol:
+        raise ValueError("Sequence quality protocol contradicts the selected paper protocol.")
     configured_folds = evaluation.get("folds")
     expected_folds = [
         {

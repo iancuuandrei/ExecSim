@@ -19,8 +19,14 @@ from execsim.data.paper.formation import (
     ingest_constituent_snapshot,
     write_formation_receipts,
 )
+from execsim.data.paper.formation_v2 import (
+    build_daily_formation_candidates,
+    select_v2_universe,
+    write_v2_universe_manifest,
+)
 from execsim.data.paper.identity import resolve_provider_symbol, validate_symbol_history
-from execsim.data.paper.manifests import file_sha256, read_json, stable_hash
+from execsim.data.paper.manifests import file_sha256, read_json, stable_hash, write_json_atomic
+from execsim.data.paper.resolution_quality import assess_session_resolution_quality
 from execsim.data.paper.schemas import InstrumentSymbolInterval
 from execsim.data.paper.universe import select_frozen_universe, write_universe_manifest
 from execsim.data.paper.validation import validate_exact_xnys_session
@@ -30,6 +36,8 @@ from execsim.ml.sequences.corpus import build_fold_sequence_corpus
 
 def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
     """Produce candidate statistics, receipts, and the frozen sourced-identity universe."""
+    if config.paper_run_id == "sparse-jepa-v2":
+        return _build_v2_universe_stage(config)
     snapshot_path = Path(config.data["constituent_snapshot"])
     formation_root = Path(config.data["formation_corpus_root"])
     ticker_path = Path(config.data["ticker_history"])
@@ -99,6 +107,106 @@ def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
     }
 
 
+def _build_v2_universe_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Build the v2 universe only from direct daily formation observations."""
+    snapshot_path = Path(config.data["constituent_snapshot"])
+    daily_path = Path(config.data["formation_daily_corpus"])
+    ticker_path = Path(config.data["ticker_history"])
+    for path in (snapshot_path, daily_path, ticker_path):
+        if not path.is_file():
+            raise RuntimeError(f"BLOCKED: required v2 formation input is unavailable: {path}")
+    snapshot = ingest_constituent_snapshot(snapshot_path)
+    daily = pd.read_parquet(daily_path)
+    import exchange_calendars as xcals
+
+    formation_start, formation_end = config.data["formation_period"]
+    expected = tuple(
+        value.date()
+        for value in xcals.get_calendar("XNYS").sessions_in_range(formation_start, formation_end)
+    )
+    candidates = build_daily_formation_candidates(
+        snapshot,
+        daily,
+        expected_session_dates=expected,
+        identity_source_hash=file_sha256(ticker_path),
+    )
+    artifact_root = config.artifact_root / "formation"
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    candidates_path = artifact_root / "candidates-v2.parquet"
+    candidates.to_parquet(candidates_path, index=False)
+    eligible = (
+        (candidates["security_type"] == "ordinary_common_stock")
+        & candidates["in_sp500_on_formation_date"].astype(bool)
+        & (candidates["median_daily_price"] >= 5.0)
+        & (
+            candidates["daily_completeness"]
+            >= float(config.data["formation_daily_completeness_minimum"])
+        )
+        & (candidates["median_daily_dollar_volume"] > 0)
+        & candidates["instrument_id"].astype(str).str.len().gt(0)
+    )
+    eligibility_path = artifact_root / "eligibility-v2.json"
+    write_json_atomic(
+        eligibility_path,
+        {
+            "schema_version": "paper-v2-formation-eligibility-v1",
+            "protocol_id": config.paper_run_id,
+            "paper_config_hash": config.config_hash,
+            "candidate_table_sha256": file_sha256(candidates_path),
+            "candidate_count": len(candidates),
+            "eligible_count": int(eligible.sum()),
+            "exclusions": [
+                {
+                    "instrument_id": str(row.instrument_id),
+                    "formation_symbol": str(row.formation_symbol),
+                    "reasons": str(row.exclusion_reasons),
+                }
+                for row in candidates.loc[~eligible].itertuples(index=False)
+            ],
+        },
+    )
+    members = select_v2_universe(candidates, size=int(config.data["universe_size"]))
+    intervals = _symbol_intervals(pd.read_parquet(ticker_path))
+    validate_symbol_history(intervals)
+    member_ids = {member.instrument_id for member in members}
+    member_ids.add(str(config.data["spy_instrument_id"]))
+    retained = tuple(item for item in intervals if item.instrument_id in member_ids)
+    missing = member_ids.difference(item.instrument_id for item in retained)
+    if missing:
+        raise RuntimeError(
+            f"BLOCKED: sourced ticker history is missing instruments: {sorted(missing)}"
+        )
+    output = Path(config.data["universe_manifest"])
+    manifest_path = write_v2_universe_manifest(
+        members,
+        output=output,
+        source_hashes=(
+            file_sha256(snapshot_path),
+            file_sha256(ticker_path),
+            file_sha256(daily_path),
+            file_sha256(candidates_path),
+        ),
+        symbol_history=tuple(
+            {
+                "instrument_id": item.instrument_id,
+                "symbol": item.symbol,
+                "start": item.start.isoformat(),
+                "end": item.end.isoformat(),
+                "source": item.source,
+            }
+            for item in retained
+        ),
+        paper_config_hash=config.config_hash,
+    )
+    return {
+        "status": "SOFTWARE READY",
+        "members": len(members),
+        "candidates": str(candidates_path),
+        "eligibility_receipt": str(eligibility_path),
+        "manifest": str(manifest_path),
+    }
+
+
 def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[str, object]:
     """Acquire formation candidates, freeze the universe, then acquire target bars."""
     from execsim.data.paper.acquisition import (
@@ -156,6 +264,8 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         spy_instrument_id=str(config.data["spy_instrument_id"]),
         output_directory=acquisition_root,
         paper_config_hash=config.config_hash,
+        protocol_id=config.paper_run_id,
+        formation_frequency=str(config.data.get("formation_frequency", "1min")),
     )
     probe_path = acquisition_root / "alpaca-sip-probe.json"
     probe = (
@@ -167,18 +277,36 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         raise ValueError("Existing Alpaca SIP probe is incompatible with this paper run.")
     fetcher = create_alpaca_sip_fetcher()
     spy_id = str(config.data["spy_instrument_id"])
-    formation_ids = tuple(dict.fromkeys((*snapshot["instrument_id"].astype(str), spy_id)))
-    formation_chunks = _acquire_period(
-        formation_ids,
-        intervals,
-        start=data.formation_start,
-        end=data.formation_end,
-        output=Path(config.data["formation_corpus_root"]),
-        fetcher=fetcher,
-        data=data,
-        acquire_chunk=acquire_chunk,
-        monthly_chunks=monthly_chunks,
-    )
+    if config.paper_run_id == "sparse-jepa-v2":
+        from execsim.data.paper.daily_acquisition import acquire_formation_daily_bars
+
+        daily_receipt = acquire_formation_daily_bars(
+            snapshot,
+            formation_start=formation_start,
+            formation_end=formation_end,
+            spy_instrument_id=spy_id,
+            output_path=Path(config.data["formation_daily_corpus"]),
+            receipt_path=Path(config.data["formation_daily_receipt"]),
+            paper_config_hash=config.config_hash,
+            cli_enabled=True,
+            config_enabled=config.allow_network,
+        )
+        formation_chunks: int | dict[str, object] = daily_receipt
+        formation_output = str(config.data["formation_daily_corpus"])
+    else:
+        formation_ids = tuple(dict.fromkeys((*snapshot["instrument_id"].astype(str), spy_id)))
+        formation_chunks = _acquire_period(
+            formation_ids,
+            intervals,
+            start=data.formation_start,
+            end=data.formation_end,
+            output=Path(config.data["formation_corpus_root"]),
+            fetcher=fetcher,
+            data=data,
+            acquire_chunk=acquire_chunk,
+            monthly_chunks=monthly_chunks,
+        )
+        formation_output = str(config.data["formation_corpus_root"])
     universe_path = Path(config.data["universe_manifest"])
     universe_result: dict[str, object] | str = "reused"
     if not _is_frozen_universe(universe_path, config_hash=config.config_hash):
@@ -205,7 +333,7 @@ def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[st
         "acquisition_plan": plan,
         "provider_probe": probe,
         "universe": universe_result,
-        "formation_output": str(config.data["formation_corpus_root"]),
+        "formation_output": formation_output,
         "target_output": str(config.data["target_corpus_root"]),
     }
 
@@ -219,17 +347,56 @@ def _expected_primary_session_count(calendar: Any, start: object, end: object) -
 
 
 def validate_data_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
-    """Validate every retained raw session against the exact XNYS minute grid."""
+    """Validate target sessions under the configured representation-quality protocol."""
     root = source or Path(config.data["target_corpus_root"])
     frame = _load_parquet_corpus(root)
+    universe = read_json(Path(config.data["universe_manifest"]))
+    symbol_intervals = _symbol_intervals(pd.DataFrame(universe.get("symbol_history", ())))
+    validate_symbol_history(symbol_intervals)
+    allowed_instruments = {
+        *(str(member["instrument_id"]) for member in universe.get("members", ())),
+        str(config.data["spy_instrument_id"]),
+    }
     timestamps = pd.to_datetime(frame["timestamp"])
     dates = timestamps.dt.tz_convert("America/New_York").dt.date
+    protocol = str(config.sequences.get("quality_protocol", "exact-minute-v1"))
     errors = []
+    quality_rows = []
     valid = 0
     for (instrument, session_date), session in frame.groupby(
         [frame["instrument_id"].astype(str), dates], sort=True
     ):
-        session_errors = validate_exact_xnys_session(session)
+        identity_errors: list[str] = []
+        if instrument not in allowed_instruments:
+            identity_errors.append("instrument is not in the frozen universe or SPY")
+        observed_symbols = tuple(session["symbol"].astype(str).str.upper().drop_duplicates())
+        if len(observed_symbols) != 1:
+            identity_errors.append("session must contain one observed symbol")
+        else:
+            try:
+                expected_symbol = resolve_provider_symbol(
+                    symbol_intervals, instrument, session_date
+                )
+            except RuntimeError as exc:
+                identity_errors.append(str(exc))
+            else:
+                if observed_symbols[0] != expected_symbol:
+                    identity_errors.append(
+                        f"observed symbol {observed_symbols[0]} does not match "
+                        f"sourced symbol {expected_symbol}"
+                    )
+        session_errors: tuple[str, ...]
+        if protocol == "resolution-aware-v2":
+            quality = assess_session_resolution_quality(session)
+            quality_rows.append(quality.to_dict())
+            session_errors = (
+                () if quality.token_valid_full_session else (quality.invalid_token_reason,)
+            )
+        elif protocol == "exact-minute-v1":
+            session_errors = validate_exact_xnys_session(session)
+        else:
+            raise ValueError(f"Unknown paper quality protocol: {protocol}")
+        session_errors = (*identity_errors, *session_errors)
         if session_errors:
             errors.append(
                 {
@@ -240,7 +407,13 @@ def validate_data_stage(config: PaperRunConfig, source: Path | None = None) -> d
             )
         else:
             valid += 1
-    return {"valid": not errors, "valid_sessions": valid, "invalid_sessions": errors}
+    return {
+        "valid": not errors,
+        "quality_protocol": protocol,
+        "valid_sessions": valid,
+        "invalid_sessions": errors,
+        "session_quality": quality_rows,
+    }
 
 
 def build_sequences_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
@@ -272,6 +445,8 @@ def build_sequences_stage(config: PaperRunConfig, source: Path | None = None) ->
             config_hash=config.config_hash,
             spy_instrument_id=str(config.data["spy_instrument_id"]),
             data_classification="historical",
+            quality_protocol=str(config.sequences["quality_protocol"]),
+            symbol_history=tuple(universe.get("symbol_history", ())),
         )
         manifests.append(asdict(built))
     return {"status": "SOFTWARE READY", "folds": manifests}

@@ -35,6 +35,8 @@ class SessionResolutionQuality:
     observed_minute_count: int
     valid_token_count: int
     invalid_token_reason: str
+    token_observed_bar_counts: tuple[int, ...] = ()
+    token_provider_gap_counts: tuple[int, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         """Return a stable manifest row."""
@@ -163,6 +165,8 @@ def assess_session_resolution_quality(
     minute_exact = not reasons and actual.equals(expected)
     provider_gap_count = max(len(expected.difference(actual)), 0)
 
+    token_counts = _token_observation_counts(actual, session_date, early_close=early_close)
+    token_gaps = tuple(TOKEN_MINUTES - value for value in token_counts)
     tokens: pd.DataFrame | None = None
     token_reasons: list[str] = list(reasons)
     valid_token_count = 0
@@ -193,6 +197,8 @@ def assess_session_resolution_quality(
         observed_minute_count=len(ordered),
         valid_token_count=valid_token_count,
         invalid_token_reason=";".join(token_reasons),
+        token_observed_bar_counts=token_counts,
+        token_provider_gap_counts=token_gaps,
     )
     return (quality, tokens if token_valid else None) if return_tokens else quality
 
@@ -233,6 +239,8 @@ def _assess_quality_only(bars: pd.DataFrame, *, daily_valid: bool) -> SessionRes
     minute_exact = not reasons and np.array_equal(actual_ns, expected_ns)
     provider_gap_count = int((~np.isin(expected_ns, actual_ns, assume_unique=False)).sum())
 
+    token_counts = _token_observation_counts(actual, session_date, early_close=early_close)
+    token_gaps = tuple(TOKEN_MINUTES - value for value in token_counts)
     token_reasons = list(reasons)
     valid_token_count = 0
     if early_close:
@@ -240,7 +248,7 @@ def _assess_quality_only(bars: pd.DataFrame, *, daily_valid: bool) -> SessionRes
     elif not reasons:
         offsets = actual.hour * 60 + actual.minute - (9 * 60 + 30)
         buckets = np.asarray(offsets // TOKEN_MINUTES, dtype=int)
-        counts = np.bincount(buckets, minlength=TOKEN_COUNT)
+        counts = np.asarray(token_counts, dtype=int)
         volume = pd.to_numeric(ordered["volume"]).to_numpy(dtype=float)
         volume_sums = np.bincount(buckets, weights=volume, minlength=TOKEN_COUNT)
         valid = (counts[:TOKEN_COUNT] >= MINIMUM_OBSERVED_BARS_PER_TOKEN) & (
@@ -272,7 +280,22 @@ def _assess_quality_only(bars: pd.DataFrame, *, daily_valid: bool) -> SessionRes
         observed_minute_count=len(ordered),
         valid_token_count=valid_token_count,
         invalid_token_reason=";".join(token_reasons),
+        token_observed_bar_counts=token_counts,
+        token_provider_gap_counts=token_gaps,
     )
+
+
+def _token_observation_counts(
+    actual: pd.DatetimeIndex, session_date: date, *, early_close: bool
+) -> tuple[int, ...]:
+    """Return all 26 observed-bar counts for an ordinary regular session."""
+    if early_close:
+        return ()
+    local = actual.tz_convert("America/New_York")
+    offsets = local.hour * 60 + local.minute - (9 * 60 + 30)
+    in_session = (offsets >= 0) & (offsets < TOKEN_COUNT * TOKEN_MINUTES)
+    counts = np.bincount(np.asarray(offsets[in_session] // TOKEN_MINUTES, dtype=int), minlength=26)
+    return tuple(int(value) for value in counts[:TOKEN_COUNT])
 
 
 def _aggregate_standard_session(
