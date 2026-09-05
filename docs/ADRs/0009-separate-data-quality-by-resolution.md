@@ -66,6 +66,8 @@ All research questions, geometries, encoder, latent width, sparsity, folds, seed
 
 V2 is a new protocol version with distinct configuration, freeze, candidate, universe, corpus, report, and artifact identities. Daily eligibility can admit securities that v1 rejected for sparse minute emission; this is the intended removal of a task-misaligned filter, not a threshold relaxation.
 
+Protocol freezes hash Git-tracked normative text after canonicalizing CRLF and bare CR line endings to LF. This makes the same committed document identity portable across Windows and Linux checkouts. Design-freeze files, checksum sidecars, acquisition responses, manifests, receipts, model files, and other empirical artifacts remain byte-exact; line-ending normalization is not applied to them.
+
 The JEPA/forecast sample can be larger than the exact-minute TCA complete-case subset. Reports and manifests must never collapse these populations into one `complete` flag. Early closes may be valid daily observations but remain excluded from the primary 26-token representation sample. Formation ranking is known only after 2021-12-31.
 
 The authorized v2 formation scan retrieved 126,461 direct daily rows for all 505 candidates plus SPY and verified the existing 45,464,276-row minute corpus at token resolution. It stopped before target acquisition. Historical model training, test inspection, and historical TCA remain `NOT RUN`. Because 497 names qualify, the terminal state is `AWAITING V2 FORMATION APPROVAL`.

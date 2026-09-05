@@ -46,7 +46,7 @@ The active implementation directions are:
 | Paper reporting hierarchy | Keep four main tables and four main figures for data, accessibility, forecasting, and execution; write support, regime, block, sparsity, and sensitivity output as appendix artifacts | Secondary characterization cannot replace a failed primary comparison |
 | Paper dependencies | Keep PyTorch 2.13.0, safetensors 0.8.0, and LightGBM 4.7.0 in exact-version optional extras | Ordinary simulation remains lightweight while paper artifacts record the evaluated dependency identity |
 | Paper execution authorization | Disable network acquisition, historical fitting, and full paper runs in both configuration and CLI by default | Synthetic acceptance must never silently trigger licensed downloads or empirical training |
-| Paper artifact provenance | Use safetensors and native LightGBM models plus checksummed, compatibility-complete checkpoint, embedding, and run manifests | Reuse must fail closed when any data, fold, cutoff, model, environment, or downstream identity changes |
+| Paper artifact provenance | Use safetensors and native LightGBM models plus checksummed, compatibility-complete checkpoint, embedding, and run manifests; hash Git-tracked normative text after canonical LF normalization while preserving empirical and receipt artifacts byte-for-byte | Reuse must fail closed when any data, fold, cutoff, model, environment, or downstream identity changes without making protocol identity depend on checkout line-ending conversion |
 
 Apply this order of precedence:
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import dataclass
@@ -169,7 +170,7 @@ def _validate_design_freeze(
         for relative, expected in documents.items()
         if not isinstance(relative, str)
         or not isinstance(expected, str)
-        or file_sha256(repository_root / relative) != expected
+        or _portable_document_sha256(repository_root / relative) != expected
     ]
     if mismatches:
         raise ValueError(f"Paper design freeze normative document mismatch: {sorted(mismatches)}")
@@ -179,6 +180,13 @@ def _validate_design_freeze(
         or not specification
     ):
         raise ValueError("Paper design freeze does not match its normative specification.")
+
+
+def _portable_document_sha256(path: Path) -> str:
+    """Hash tracked text after canonical LF normalization across Git checkouts."""
+    raw = path.read_bytes()
+    normalized = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(normalized).hexdigest()
 
 
 def _validate_archived_v1_receipts(freeze_path: Path) -> None:

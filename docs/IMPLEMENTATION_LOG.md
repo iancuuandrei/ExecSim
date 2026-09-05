@@ -6,6 +6,7 @@
 - Made stored symbols session-active and fail-closed against sourced stable-instrument intervals instead of copying the formation symbol.
 - Preserved per-token observed-bar and provider-gap counts so the two-observation computability floor remains distinguishable from near-complete tokens.
 - Restored the original v1 design-freeze bytes and retained its later safe-default and terminal receipts as separately named self-contained artifacts; v1 loading no longer requires Git history.
+- Canonicalized line endings only when hashing Git-tracked normative text, preventing Windows/Linux checkout conversion from changing protocol identity while retaining byte-exact artifact receipts.
 - Kept target acquisition, historical model fitting, locked-test evaluation, and historical TCA `NOT RUN`.
 
 ## Sparse-JEPA empirical corpus gate — 2026-09-05

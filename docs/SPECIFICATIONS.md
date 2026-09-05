@@ -97,7 +97,7 @@ Commands return zero on success. Validation returns one for invalid data. Contra
 
 ## Determinism and compatibility
 
-Stable ordering, explicit seeds, canonical JSON hashing, checksummed sources and models, exact integer reconciliation, and named numerical tolerances make substantive outputs reproducible. Build timestamps, Git commits, dependency versions, and timing telemetry are provenance, not model inputs. Artifact loading fails closed on checksum or feature schema, target schema, bucket size, or timezone mismatch.
+Stable ordering, explicit seeds, canonical JSON hashing, checksummed sources and models, exact integer reconciliation, and named numerical tolerances make substantive outputs reproducible. Git-tracked normative text uses SHA-256 after CRLF and bare CR are canonicalized to LF, so checkout line-ending conversion cannot change protocol identity. Design freezes, sidecars, provider responses, receipts, manifests, fitted models, and empirical artifacts use byte-exact hashes. Build timestamps, Git commits, dependency versions, and timing telemetry are provenance, not model inputs. Artifact loading fails closed on checksum or feature schema, target schema, bucket size, or timezone mismatch.
 
 ## Verification contract
 

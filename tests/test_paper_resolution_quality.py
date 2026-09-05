@@ -20,7 +20,7 @@ from execsim.data.paper.resolution_quality import (
     assess_session_resolution_quality,
     validate_daily_observation,
 )
-from execsim.ml.paper.configs import load_paper_config
+from execsim.ml.paper.configs import _portable_document_sha256, load_paper_config
 from execsim.ml.paper.orchestration import validate_data_stage
 from execsim.ml.sequences.builder import build_session_sequence
 
@@ -332,6 +332,15 @@ def test_v1_terminal_evidence_is_immutable_and_v2_paths_are_distinct() -> None:
     assert v1.artifact_root != v2.artifact_root
     assert v1.data["universe_manifest"] != v2.data["universe_manifest"]
     assert v1.data["target_corpus_root"] != v2.data["target_corpus_root"]
+
+
+def test_normative_document_hash_is_portable_across_line_endings(tmp_path: Path) -> None:
+    lf_path = tmp_path / "lf.md"
+    crlf_path = tmp_path / "crlf.md"
+    lf_path.write_bytes(b"# Protocol\n\nSame content.\n")
+    crlf_path.write_bytes(b"# Protocol\r\n\r\nSame content.\r\n")
+
+    assert _portable_document_sha256(lf_path) == _portable_document_sha256(crlf_path)
 
 
 def test_resolution_quality_manifest_keeps_daily_token_and_minute_fields(
