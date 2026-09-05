@@ -861,11 +861,20 @@ def test_cli_v2_run_reaches_target_gate_without_authorization(capsys) -> None:
     assert payload == {"build_universe": "reused", "download_data": "DATA NOT ACQUIRED"}
 
 
-def test_formation_readiness_dispatches_by_protocol(monkeypatch) -> None:
+def test_formation_readiness_dispatches_by_protocol(tmp_path: Path, monkeypatch) -> None:
     import execsim.ml.paper.orchestration as orchestration
 
     v1 = load_paper_config(Path("configs/paper/sparse_jepa"))
-    v2 = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
+    loaded_v2 = load_paper_config(Path("configs/paper/sparse_jepa_v2"))
+    daily = tmp_path / "daily-bars.parquet"
+    daily.write_bytes(b"direct daily formation artifact")
+    v2 = replace(
+        loaded_v2,
+        sections={
+            **loaded_v2.sections,
+            "data": {**loaded_v2.data, "formation_daily_corpus": str(daily)},
+        },
+    )
     observed: list[Path] = []
 
     def record_minute_corpus(path: Path) -> bool:
