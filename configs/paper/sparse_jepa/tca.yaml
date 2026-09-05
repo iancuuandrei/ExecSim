@@ -1,0 +1,13 @@
+universe_size: 30
+window: ["10:30", "15:30"]
+quantity_fraction_adv20: 0.03
+planned_participation_rate: 0.10
+hard_participation_rate: 0.10
+risk_aversion: 0.0
+tracking_penalty: 0.0
+forecast_update_minutes: 15
+fill_minutes: 1
+half_spread_arrival_fraction: 0.00005
+temporary_impact_at_full_participation: 0.001
+sensitivity_universe_size: 10
+sensitivity_quantity_fraction_adv20: [0.01, 0.05]

@@ -1,5 +1,18 @@
 # Implementation log
 
+## Sparse predictive-representation paper framework — 2026-09-04
+
+- Accepted ADR 0006 and added a focused paper specification covering the hypothesis, causal boundary, locked folds, artifacts, statistical method, and rejected alternatives.
+- Added a frozen formation-universe schema, resumable immutable Alpaca SIP acquisition units, atomic receipts, point-in-time split adjustment, and regular-session validation. No provider request ran during implementation.
+- Added one-session `26 x 18` sequence tensors, causal sample indexes, deterministic two-position train sampling, and training-fold robust normalization.
+- Added matched dense and sparse shared-encoder JEPA models, exact-forward RepReLU with GELU derivatives, direct horizon predictors P0/P1/P2, generalized-Gaussian targets, rectified RMS-normalized RDMReg, diagnostics, difficulty weights, and safetensors checkpoints.
+- Added native LightGBM scale/shape forecasting, a dimension-matched random projection control, causal 15-minute-to-minute `VolumeForecast` expansion, fold-safe moving-block bootstrap, and deterministic paper-bundle generation.
+- Redirected the paper protocol to frozen representation accessibility and information retention: 13 dynamic encoder fields plus five predictor-conditioning fields, dense versus rectified-Gaussian sparse geometry, common RDM selection, horizon-specific frozen probes, an untrained nonlinear placebo, residual scale targets, bounded shape origins, causal held-out histories, 15-minute committed execution, oracle-relative regret, and main/appendix reporting separation. The prior adaptation and random-projection rows remain non-paper legacy functionality.
+- Added six paper configuration files and the `execsim ml paper` command group. Network acquisition, historical training, and full evaluation require separate configuration and command-line enablement.
+- Added deterministic CPU synthetic tests. These tests prove software plumbing and numerical invariants only; historical predictive quality and paper conclusions remain `NOT RUN`.
+- Expanded safe checkpoint, embedding, and run provenance to cover the complete compatibility contract. Added executable synthetic fixtures for representation export, forecast and representation evaluation, MPC/TCA, and the exact paper output bundle.
+- Closed all 20 software acceptance gates with 101 passing tests, 76% branch-aware coverage, Ruff, mypy over 104 source files, and 14-area repository validation. The detailed classifications are in `docs/PAPER_IMPLEMENTATION_REPORT.md`.
+
 ## Performance hardening and ADR governance — 2026-09-04
 
 - Added indexed ADRs for the Python stack and navigation, point-in-time boundary, convex QP and impact model, forecast-only ML boundary, and performance workspace design.

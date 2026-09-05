@@ -10,6 +10,8 @@ V1 includes canonical minute bars, deterministic scenarios, point-in-time volume
 
 The framework treats optimization as the decision layer. ML may forecast volume inputs but does not directly choose unconstrained trades. Historical model fitting and predictive-performance claims are outside this acceptance run.
 
+The optional sparse predictive-representation paper layer supplies a locked, fixture-qualified research protocol. It does not expand the system into live trading, direct learned execution, or an empirical performance claim. Licensed acquisition and historical training remain separately authorized actions.
+
 ## Non-goals
 
 V1 does not provide live execution, broker order submission, alpha prediction, an order book, queue position, counterfactual market response, multi-asset optimization, or multi-day parent orders. It is not production trading infrastructure.

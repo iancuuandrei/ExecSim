@@ -1,0 +1,66 @@
+{
+  "schema_version": "paper-design-freeze-v1",
+  "status": "PROTOCOL_FROZEN",
+  "frozen_at": "2026-09-05",
+  "source_specification": "docs/PAPER_DESIGN.md",
+  "source_specification_sha256": "1d32a400f58076be328c609d52f05e17c1c638ccb1635011eceebd9ee7006372",
+  "research_hierarchy": [
+    "representation_accessibility",
+    "information_retention",
+    "supervised_forecast_value",
+    "execution_decision_value"
+  ],
+  "observed_features": 18,
+  "encoder_features": 13,
+  "conditioning_features": 5,
+  "latent_dimension": 128,
+  "horizons": [1, 2, 4, 8],
+  "primary_geometries": {
+    "dense": {"link": "identity", "p": 2.0, "mu": 0.0, "sigma": 1.0},
+    "sparse": {
+      "link": "rep_relu",
+      "p": 2.0,
+      "mu": -0.6744897501960817,
+      "sigma": 1.0,
+      "zero_fraction": 0.75,
+      "normalization": "derived_rectified_rms"
+    }
+  },
+  "rdm_lambda_selection": {
+    "candidates": [0.1, 1.0, 10.0],
+    "fold": "fold-1",
+    "seed": 13,
+    "criterion": "mean_fixed_observable_probe_error_across_gate_passing_geometries"
+  },
+  "primary_seeds": [13, 29, 47],
+  "probe_capacities": ["affine_ridge", "mlp_64", "mlp_256"],
+  "paper_rows": ["ewma", "raw", "untrained_neural", "dense", "sparse"],
+  "primary_representation_runs": 18,
+  "maximum_representation_runs": 29,
+  "primary_bootstrap_block_dates": 5,
+  "bootstrap_sensitivity_block_dates": [1, 10],
+  "confirmatory_contrasts": [
+    "representation:sparse-vs-dense:affine-normalized-latent-error",
+    "forecast:sparse-vs-dense:log-remaining-volume-mae",
+    "forecast:sparse-vs-dense:conditional-curve-error",
+    "forecast:sparse-vs-raw:log-remaining-volume-mae",
+    "forecast:sparse-vs-raw:conditional-curve-error"
+  ],
+  "time_identities": [
+    "training_cutoff",
+    "market_information_as_of",
+    "feature_history_end"
+  ],
+  "difficulty_adaptation": "future_only",
+  "seed_ensemble": "appendix_only",
+  "parameter_selection_receipt": "NOT RUN",
+  "historical_empirical_status": "NOT RUN",
+  "future_axes": {
+    "encoder_capacity": "not_varied",
+    "predictor_capacity": "probe_only",
+    "latent_dimension": "not_varied",
+    "target_sparsity": "appendix_only",
+    "training_data_scale": "not_varied",
+    "market_complexity_stratum": "not_varied"
+  }
+}

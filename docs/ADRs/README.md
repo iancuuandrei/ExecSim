@@ -11,6 +11,9 @@ Architecture decision records (ADRs) explain durable technical choices, their co
 | [0003](0003-explicit-convex-qp-and-linear-impact.md) | Accepted | Use an explicit OSQP convex program and linear-in-participation temporary impact |
 | [0004](0004-forecast-only-ml-boundary.md) | Accepted | Restrict V1 ML to point-in-time input forecasts |
 | [0005](0005-causal-forecast-cache-and-horizon-workspaces.md) | Accepted | Cache causal forecast matrices and reuse horizon-indexed OSQP workspaces |
+| [0006](0006-sparse-predictive-representation-paper-framework.md) | Superseded | Add a controlled sparse predictive-representation paper framework |
+| [0007](0007-harden-historical-paper-pipeline-contracts.md) | Superseded | Harden the historical paper pipeline contracts and orchestration |
+| [0008](0008-redirect-paper-to-representation-accessibility.md) | Accepted | Redirect the paper to representation accessibility |
 
 ## Recording a decision
 

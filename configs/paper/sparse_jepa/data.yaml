@@ -1,0 +1,23 @@
+paper_run_id: sparse-jepa-v1
+artifact_root: artifacts/paper
+report_root: reports/paper/sparse_jepa
+allow_network: false
+allow_historical_training: false
+allow_full_paper_run: false
+provider: alpaca
+feed: sip
+frequency: 1min
+adjustment: raw
+timezone: America/New_York
+extended_hours: false
+formation_period: [2021-01-04, 2021-12-31]
+target_period: [2022-01-03, 2025-12-31]
+universe_size: 100
+constituent_snapshot: data/paper/formation/constituents.parquet
+ticker_history: data/paper/formation/ticker_history.parquet
+formation_corpus_root: data/paper/formation/bars
+universe_manifest: data/manifests/paper_universe_v1.json
+corporate_action_source: data/paper/corporate_actions/actions.parquet
+corporate_action_manifest: data/paper/corporate_actions/manifest.json
+target_corpus_root: data/paper/raw
+spy_instrument_id: benchmark-spy

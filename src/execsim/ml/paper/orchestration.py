@@ -1,0 +1,2107 @@
+"""Manifest-driven orchestration for the locked historical paper stages."""
+
+from __future__ import annotations
+
+from dataclasses import asdict
+from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Any, cast
+
+import numpy as np
+import pandas as pd
+
+from execsim.data.paper.corporate_action_manifest import (
+    ingest_corporate_actions,
+    write_corporate_action_manifest,
+)
+from execsim.data.paper.formation import (
+    build_formation_candidates,
+    ingest_constituent_snapshot,
+    write_formation_receipts,
+)
+from execsim.data.paper.identity import resolve_provider_symbol, validate_symbol_history
+from execsim.data.paper.manifests import file_sha256, read_json, stable_hash
+from execsim.data.paper.schemas import InstrumentSymbolInterval
+from execsim.data.paper.universe import select_frozen_universe, write_universe_manifest
+from execsim.data.paper.validation import validate_exact_xnys_session
+from execsim.ml.paper.configs import PaperRunConfig
+from execsim.ml.sequences.corpus import build_fold_sequence_corpus
+
+
+def build_universe_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Produce candidate statistics, receipts, and the frozen sourced-identity universe."""
+    snapshot_path = Path(config.data["constituent_snapshot"])
+    formation_root = Path(config.data["formation_corpus_root"])
+    ticker_path = Path(config.data["ticker_history"])
+    for path in (snapshot_path, formation_root, ticker_path):
+        if not path.exists():
+            raise RuntimeError(f"BLOCKED: required formation input is unavailable: {path}")
+    snapshot = ingest_constituent_snapshot(snapshot_path)
+    formation = _load_parquet_corpus(formation_root)
+    import exchange_calendars as xcals
+
+    calendar = xcals.get_calendar("XNYS")
+    formation_start, formation_end = config.data["formation_period"]
+    expected = len(calendar.sessions_in_range(formation_start, formation_end))
+    candidates, exclusions = build_formation_candidates(
+        snapshot, formation, expected_session_count=expected
+    )
+    artifact_root = config.artifact_root / "formation"
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    candidates_path = artifact_root / "candidates.parquet"
+    candidates.to_parquet(candidates_path, index=False)
+    receipts_path = write_formation_receipts(
+        artifact_root / "receipts.json",
+        snapshot_path=snapshot_path,
+        candidates=candidates,
+        exclusions=exclusions,
+        paper_config_hash=config.config_hash,
+    )
+    members = select_frozen_universe(candidates)
+    history_frame = pd.read_parquet(ticker_path)
+    intervals = _symbol_intervals(history_frame)
+    validate_symbol_history(intervals)
+    member_ids = {member.instrument_id for member in members}
+    member_ids.add(str(config.data["spy_instrument_id"]))
+    retained = tuple(item for item in intervals if item.instrument_id in member_ids)
+    missing = member_ids.difference(item.instrument_id for item in retained)
+    if missing:
+        raise RuntimeError(
+            f"BLOCKED: sourced ticker history is missing instruments: {sorted(missing)}"
+        )
+    output = Path(config.data["universe_manifest"])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    manifest = write_universe_manifest(
+        members,
+        output=str(output),
+        source_hashes=(
+            file_sha256(snapshot_path),
+            file_sha256(ticker_path),
+            file_sha256(candidates_path),
+        ),
+        symbol_history=tuple(
+            {
+                "instrument_id": item.instrument_id,
+                "symbol": item.symbol,
+                "start": item.start.isoformat(),
+                "end": item.end.isoformat(),
+                "source": item.source,
+            }
+            for item in retained
+        ),
+        paper_config_hash=config.config_hash,
+    )
+    return {
+        "status": "SOFTWARE READY",
+        "members": len(members),
+        "candidates": str(candidates_path),
+        "receipts": str(receipts_path),
+        "manifest": manifest,
+    }
+
+
+def download_data_stage(config: PaperRunConfig, *, cli_enabled: bool) -> dict[str, object]:
+    """Acquire formation candidates, freeze the universe, then acquire target bars."""
+    from execsim.data.paper.acquisition import (
+        acquire_chunk,
+        create_alpaca_sip_fetcher,
+        monthly_chunks,
+    )
+    from execsim.data.paper.schemas import PaperDataConfig
+
+    config.authorize("network", cli_enabled=cli_enabled)
+    snapshot_path = Path(config.data["constituent_snapshot"])
+    ticker_path = Path(config.data["ticker_history"])
+    if not snapshot_path.is_file() or not ticker_path.is_file():
+        raise RuntimeError("BLOCKED: constituent snapshot or ticker history is unavailable.")
+    snapshot = ingest_constituent_snapshot(snapshot_path)
+    intervals = _symbol_intervals(pd.read_parquet(ticker_path))
+    validate_symbol_history(intervals)
+    data = PaperDataConfig(
+        provider=cast(Any, config.data["provider"]),
+        feed=cast(Any, config.data["feed"]),
+        frequency=cast(Any, config.data["frequency"]),
+        timezone=cast(Any, config.data["timezone"]),
+        adjustment=cast(Any, config.data["adjustment"]),
+        extended_hours=bool(config.data["extended_hours"]),
+        formation_start=_as_date(config.data["formation_period"][0]),
+        formation_end=_as_date(config.data["formation_period"][1]),
+        target_start=_as_date(config.data["target_period"][0]),
+        target_end=_as_date(config.data["target_period"][1]),
+        allow_network=True,
+        paper_config_hash=config.config_hash,
+    )
+    fetcher = create_alpaca_sip_fetcher()
+    spy_id = str(config.data["spy_instrument_id"])
+    formation_ids = tuple(dict.fromkeys((*snapshot["instrument_id"].astype(str), spy_id)))
+    formation_chunks = _acquire_period(
+        formation_ids,
+        intervals,
+        start=data.formation_start,
+        end=data.formation_end,
+        output=Path(config.data["formation_corpus_root"]),
+        fetcher=fetcher,
+        data=data,
+        acquire_chunk=acquire_chunk,
+        monthly_chunks=monthly_chunks,
+    )
+    universe_path = Path(config.data["universe_manifest"])
+    universe_result: dict[str, object] | str = "reused"
+    if not universe_path.is_file():
+        universe_result = build_universe_stage(config)
+    universe = read_json(universe_path)
+    target_ids = tuple(
+        dict.fromkeys((*[str(member["instrument_id"]) for member in universe["members"]], spy_id))
+    )
+    target_chunks = _acquire_period(
+        target_ids,
+        intervals,
+        start=data.target_start,
+        end=data.target_end,
+        output=Path(config.data["target_corpus_root"]),
+        fetcher=fetcher,
+        data=data,
+        acquire_chunk=acquire_chunk,
+        monthly_chunks=monthly_chunks,
+    )
+    return {
+        "status": "SOFTWARE READY",
+        "formation_chunks": formation_chunks,
+        "target_chunks": target_chunks,
+        "universe": universe_result,
+        "formation_output": str(config.data["formation_corpus_root"]),
+        "target_output": str(config.data["target_corpus_root"]),
+    }
+
+
+def validate_data_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
+    """Validate every retained raw session against the exact XNYS minute grid."""
+    root = source or Path(config.data["target_corpus_root"])
+    frame = _load_parquet_corpus(root)
+    timestamps = pd.to_datetime(frame["timestamp"])
+    dates = timestamps.dt.tz_convert("America/New_York").dt.date
+    errors = []
+    valid = 0
+    for (instrument, session_date), session in frame.groupby(
+        [frame["instrument_id"].astype(str), dates], sort=True
+    ):
+        session_errors = validate_exact_xnys_session(session)
+        if session_errors:
+            errors.append(
+                {
+                    "instrument_id": instrument,
+                    "session_date": session_date.isoformat(),
+                    "errors": session_errors,
+                }
+            )
+        else:
+            valid += 1
+    return {"valid": not errors, "valid_sessions": valid, "invalid_sessions": errors}
+
+
+def build_sequences_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
+    """Build complete train/validation/test stores for every locked fold."""
+    universe_path = Path(config.data["universe_manifest"])
+    action_source = Path(config.data["corporate_action_source"])
+    if not universe_path.is_file() or not action_source.is_file():
+        raise RuntimeError("BLOCKED: universe or sourced corporate-action input is unavailable.")
+    universe = read_json(universe_path)
+    if universe.get("paper_config_hash") != config.config_hash:
+        raise ValueError("Universe manifest was built under a different paper configuration.")
+    actions = ingest_corporate_actions(action_source)
+    action_manifest_path = Path(config.data["corporate_action_manifest"])
+    action_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    write_corporate_action_manifest(
+        action_source, actions, action_manifest_path, paper_config_hash=config.config_hash
+    )
+    bars = _load_parquet_corpus(source or Path(config.data["target_corpus_root"]))
+    manifests = []
+    for fold in config.evaluation["folds"]:
+        built = build_fold_sequence_corpus(
+            bars,
+            universe_members=tuple(universe["members"]),
+            corporate_actions=actions,
+            fold_id=str(fold["id"]),
+            output_root=config.artifact_root / "sequences",
+            universe_manifest_hash=file_sha256(universe_path),
+            corporate_action_manifest_hash=file_sha256(action_manifest_path),
+            config_hash=config.config_hash,
+            spy_instrument_id=str(config.data["spy_instrument_id"]),
+            data_classification="historical",
+        )
+        manifests.append(asdict(built))
+    return {"status": "SOFTWARE READY", "folds": manifests}
+
+
+def validate_sequences_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Verify all fold manifests, indexes, partitions, and upstream config identity."""
+    from execsim.ml.sequences.streaming import PaperSequenceDataset
+
+    rows = []
+    for fold in config.evaluation["folds"]:
+        path = config.artifact_root / "sequences" / str(fold["id"]) / "sequence-manifest.json"
+        payload = read_json(path)
+        if payload["config_hash"] != config.config_hash:
+            raise ValueError(f"Sequence manifest config mismatch: {path}")
+        counts = {}
+        for partition in ("train", "validation", "test"):
+            dataset = PaperSequenceDataset(path, partition=partition, seed=13)
+            counts[partition] = len(dataset)
+        rows.append({"fold_id": fold["id"], "samples": counts, "manifest": str(path)})
+    return {"valid": True, "folds": rows}
+
+
+def select_rdm_lambda_stage(
+    config: PaperRunConfig,
+    *,
+    allow_historical_training: bool,
+    trusted_local_resume: bool = False,
+) -> dict[str, object]:
+    """Run the six predeclared Fold 1 candidates and freeze one common coefficient."""
+    if not allow_historical_training:
+        raise PermissionError("RDM lambda selection requires historical-training authorization.")
+    import torch
+
+    from execsim.ml.representations.checkpoints import load_checkpoint
+    from execsim.ml.representations.historical_trainer import (
+        HistoricalTrainerOptions,
+        HistoricalTrainingIdentity,
+        train_historical_representation,
+    )
+    from execsim.ml.representations.jepa import PredictiveRepresentationModel
+    from execsim.ml.representations.schemas import CheckpointCompatibility, RepresentationConfig
+    from execsim.ml.representations.selection import (
+        CommonLambdaCandidate,
+        select_common_rdm_lambda,
+        streaming_observable_probe_error,
+    )
+    from execsim.ml.sequences.streaming import PaperSequenceDataset, build_sequence_dataloader
+
+    values = config.representation
+    fold = next(item for item in config.evaluation["folds"] if item["id"] == "fold-1")
+    sequence_path = config.artifact_root / "sequences" / "fold-1" / "sequence-manifest.json"
+    sequence = read_json(sequence_path)
+    options = HistoricalTrainerOptions(
+        batch_size=int(values["batch_size"]),
+        num_workers=int(config.sequences["num_workers"]),
+        prefetch_factor=int(config.sequences["prefetch_factor"]),
+        cache_size=int(config.sequences["session_cache_size"]),
+        max_epochs=int(values["max_epochs"]),
+        patience=int(values["early_stopping_patience"]),
+        learning_rate=float(values["learning_rate"]),
+        weight_decay=float(values["weight_decay"]),
+        warmup_fraction=float(values["warmup_fraction"]),
+        gradient_clip=float(values["gradient_clip"]),
+        checkpoint_interval_steps=int(values["checkpoint_interval_steps"]),
+        diagnostic_sample_rows=int(values["rdm_diagnostic_sample_rows"]),
+    )
+    identity = HistoricalTrainingIdentity(
+        fold_id="fold-1",
+        cutoff=str(fold["train"][1]),
+        universe_manifest_hash=str(sequence["universe_manifest_hash"]),
+        dataset_manifest_hash=stable_hash(sequence["raw_hashes"]),
+        normalization_hash=stable_hash(sequence["normalization"]),
+        architecture_hash=stable_hash(
+            {"observed_dynamic_conditioning_latent_context": [18, 13, 5, 128, 8]}
+        ),
+        config_hash=config.config_hash,
+        code_commit=_git_head(),
+    )
+    candidates = []
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    for rdm_lambda in values["rdm_lambda_candidates"]:
+        for geometry in ("dense", "sparse"):
+            target = values[f"{geometry}_target"]
+            representation = RepresentationConfig(
+                geometry,
+                generalized_gaussian_p=float(target["p"]),
+                generalized_gaussian_mu=float(target["mu"]),
+                generalized_gaussian_sigma=float(target["sigma"]),
+                rdm_projections_train=int(values["rdm_projections_train"]),
+                rdm_projections_evaluation=int(values["rdm_projections_evaluation"]),
+                seed=13,
+            )
+            root = config.artifact_root / "selection" / f"lambda={rdm_lambda}" / geometry
+            if not (root / "final" / "manifest.json").is_file():
+                resume_from = _latest_periodic_checkpoint(root)
+                if resume_from is not None and not trusted_local_resume:
+                    raise RuntimeError(
+                        "BLOCKED: a checksummed local periodic resume exists; pass "
+                        "--trust-local-resume to load its pickle state."
+                    )
+                train_historical_representation(
+                    sequence_path,
+                    representation=representation,
+                    identity=identity,
+                    output_root=root,
+                    allow_historical_training=True,
+                    options=options,
+                    rdm_lambda=float(rdm_lambda),
+                    resume_from=resume_from,
+                    trusted_resume=trusted_local_resume,
+                )
+            expected = CheckpointCompatibility(**read_json(root / "compatibility.json"))
+            _assert_representation_reuse(
+                expected,
+                representation,
+                identity,
+                sequence_path,
+                options,
+                float(rdm_lambda),
+            )
+            model = PredictiveRepresentationModel(representation).to(device)
+            manifest = load_checkpoint(model, root / "final", expected=expected)
+            train_data = PaperSequenceDataset(
+                sequence_path,
+                partition="train",
+                seed=13,
+                cache_size=options.cache_size,
+                sample_train_positions=False,
+            )
+            valid_data = PaperSequenceDataset(
+                sequence_path,
+                partition="validation",
+                seed=13,
+                cache_size=options.cache_size,
+            )
+            error = streaming_observable_probe_error(
+                model,
+                build_sequence_dataloader(
+                    train_data,
+                    batch_size=options.batch_size,
+                    num_workers=options.num_workers,
+                    device=device,
+                    prefetch_factor=options.prefetch_factor,
+                ),
+                build_sequence_dataloader(
+                    valid_data,
+                    batch_size=options.batch_size,
+                    num_workers=options.num_workers,
+                    device=device,
+                    prefetch_factor=options.prefetch_factor,
+                ),
+                device=device,
+            )
+            candidates.append(
+                CommonLambdaCandidate(
+                    float(rdm_lambda),
+                    geometry,
+                    "fold-1",
+                    13,
+                    error,
+                    manifest.collapse_gate_status,
+                    manifest.weights_sha256,
+                )
+            )
+    output = config.artifact_root / "selection" / "rdm-lambda.json"
+    selected = select_common_rdm_lambda(
+        tuple(candidates), output=output, paper_config_hash=config.config_hash
+    )
+    return {"status": "SOFTWARE READY", "selected_rdm_lambda": selected, "receipt": str(output)}
+
+
+def train_representations_stage(
+    config: PaperRunConfig,
+    *,
+    allow_historical_training: bool,
+    trusted_local_resume: bool = False,
+) -> dict[str, object]:
+    """Train the locked fold/seed/dense-sparse matrix using streaming historical loaders."""
+    from execsim.ml.representations.checkpoints import load_checkpoint
+    from execsim.ml.representations.historical_trainer import (
+        HistoricalTrainerOptions,
+        HistoricalTrainingIdentity,
+        train_historical_representation,
+    )
+    from execsim.ml.representations.jepa import PredictiveRepresentationModel
+    from execsim.ml.representations.schemas import CheckpointCompatibility, RepresentationConfig
+
+    if not allow_historical_training:
+        raise PermissionError("Historical representation training requires separate authorization.")
+    values = config.representation
+    options = HistoricalTrainerOptions(
+        batch_size=int(values["batch_size"]),
+        num_workers=int(config.sequences["num_workers"]),
+        prefetch_factor=int(config.sequences["prefetch_factor"]),
+        cache_size=int(config.sequences["session_cache_size"]),
+        max_epochs=int(values["max_epochs"]),
+        patience=int(values["early_stopping_patience"]),
+        learning_rate=float(values["learning_rate"]),
+        weight_decay=float(values["weight_decay"]),
+        warmup_fraction=float(values["warmup_fraction"]),
+        gradient_clip=float(values["gradient_clip"]),
+        checkpoint_interval_steps=int(values["checkpoint_interval_steps"]),
+        diagnostic_sample_rows=int(values["rdm_diagnostic_sample_rows"]),
+    )
+    selection_path = config.artifact_root / "selection" / "rdm-lambda.json"
+    if not selection_path.is_file():
+        select_rdm_lambda_stage(
+            config,
+            allow_historical_training=True,
+            trusted_local_resume=trusted_local_resume,
+        )
+    selection = _load_common_lambda_receipt(config)
+    common_rdm_lambda = float(cast(Any, selection["selected_rdm_lambda"]))
+    results = []
+    for fold in config.evaluation["folds"]:
+        fold_id = str(fold["id"])
+        sequence_path = config.artifact_root / "sequences" / fold_id / "sequence-manifest.json"
+        sequence = read_json(sequence_path)
+        identity = HistoricalTrainingIdentity(
+            fold_id=fold_id,
+            cutoff=str(fold["train"][1]),
+            universe_manifest_hash=str(sequence["universe_manifest_hash"]),
+            dataset_manifest_hash=stable_hash(sequence["raw_hashes"]),
+            normalization_hash=stable_hash(sequence["normalization"]),
+            architecture_hash=stable_hash(
+                {
+                    "encoder": "linear-layernorm-gelu-linear",
+                    "observed_dynamic_conditioning_latent_context": [18, 13, 5, 128, 8],
+                }
+            ),
+            config_hash=config.config_hash,
+            code_commit=_git_head(),
+        )
+        for geometry in values["geometries"]:
+            target = values[f"{geometry}_target"]
+            for seed in values["seeds"]:
+                representation = RepresentationConfig(
+                    str(geometry),  # type: ignore[arg-type]
+                    predictor_family=str(values["predictor_family"]),  # type: ignore[arg-type]
+                    generalized_gaussian_p=float(target["p"]),
+                    generalized_gaussian_mu=float(target["mu"]),
+                    generalized_gaussian_sigma=float(target["sigma"]),
+                    rdm_projections_train=int(values["rdm_projections_train"]),
+                    rdm_projections_evaluation=int(values["rdm_projections_evaluation"]),
+                    seed=int(seed),
+                )
+                output = (
+                    config.artifact_root / "representations" / fold_id / str(geometry) / str(seed)
+                )
+                if (output / "final" / "manifest.json").is_file():
+                    expected = CheckpointCompatibility(**read_json(output / "compatibility.json"))
+                    _assert_representation_reuse(
+                        expected,
+                        representation,
+                        identity,
+                        sequence_path,
+                        options,
+                        common_rdm_lambda,
+                    )
+                    loaded = load_checkpoint(
+                        PredictiveRepresentationModel(representation),
+                        output / "final",
+                        expected=expected,
+                    )
+                    if loaded.seed != int(seed):
+                        raise ValueError("Reusable checkpoint seed does not match the run.")
+                    results.append(
+                        {"fold_id": fold_id, "geometry": geometry, "seed": seed, "status": "reused"}
+                    )
+                    continue
+                trained = train_historical_representation(
+                    sequence_path,
+                    representation=representation,
+                    identity=identity,
+                    output_root=output,
+                    allow_historical_training=True,
+                    options=options,
+                    rdm_lambda=common_rdm_lambda,
+                    resume_from=_latest_periodic_checkpoint(output),
+                    trusted_resume=trusted_local_resume,
+                )
+                results.append(asdict(trained))
+    return {
+        "status": "SOFTWARE READY",
+        "runs": results,
+        "future_difficulty_adaptation": "EXCLUDED FROM PAPER MATRIX",
+    }
+
+
+def export_embeddings_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Export every fold/seed/geometry checkpoint through the batched historical path."""
+    import torch
+
+    from execsim.ml.representations.embedding_pipeline import export_embedding_corpus
+    from execsim.ml.representations.jepa import PredictiveRepresentationModel
+    from execsim.ml.representations.schemas import CheckpointCompatibility, RepresentationConfig
+
+    results = []
+    for fold in config.evaluation["folds"]:
+        fold_id = str(fold["id"])
+        sequence_path = config.artifact_root / "sequences" / fold_id / "sequence-manifest.json"
+        export_variants = (("dense", "none"), ("sparse", "none"))
+        for storage_geometry, adaptation in export_variants:
+            for seed in config.representation["seeds"]:
+                run_root = (
+                    config.artifact_root
+                    / "representations"
+                    / fold_id
+                    / storage_geometry
+                    / str(seed)
+                )
+                compatibility_path = run_root / "compatibility.json"
+                if not compatibility_path.is_file():
+                    raise RuntimeError(
+                        f"BLOCKED: representation compatibility is missing: {run_root}"
+                    )
+                expected = CheckpointCompatibility(**read_json(compatibility_path))
+                representation = RepresentationConfig(
+                    expected.geometry,
+                    predictor_family=expected.predictor_family,
+                    generalized_gaussian_p=expected.generalized_gaussian_p,
+                    generalized_gaussian_mu=expected.generalized_gaussian_mu,
+                    generalized_gaussian_sigma=expected.generalized_gaussian_sigma,
+                    rdm_projections_train=expected.rdm_projections,
+                    rdm_projections_evaluation=int(
+                        config.representation["rdm_projections_evaluation"]
+                    ),
+                    seed=int(seed),
+                )
+                output = (
+                    config.artifact_root / "embeddings" / fold_id / storage_geometry / str(seed)
+                )
+                if (output / "manifest.json").is_file():
+                    _validate_embedding_reuse(
+                        output,
+                        expected=expected,
+                        sequence_path=sequence_path,
+                        checkpoint_directory=run_root / "final",
+                        seed=int(seed),
+                        geometry=expected.geometry,
+                        adaptation=adaptation,
+                    )
+                    results.append(
+                        {
+                            "fold_id": fold_id,
+                            "geometry": storage_geometry,
+                            "seed": seed,
+                            "status": "reused",
+                        }
+                    )
+                    continue
+                manifest = export_embedding_corpus(
+                    PredictiveRepresentationModel(representation),
+                    checkpoint_directory=run_root / "final",
+                    expected_checkpoint=expected,
+                    sequence_manifest_path=sequence_path,
+                    output_root=output,
+                    seed=int(seed),
+                    geometry=expected.geometry,
+                    adaptation=adaptation,
+                    device="cuda" if torch.cuda.is_available() else "cpu",
+                    batch_size=int(config.representation["batch_size"]),
+                    num_workers=int(config.sequences["num_workers"]),
+                    cache_size=int(config.sequences["session_cache_size"]),
+                )
+                results.append(
+                    {
+                        "fold_id": fold_id,
+                        "geometry": storage_geometry,
+                        "seed": seed,
+                        "manifest": str(manifest),
+                    }
+                )
+    return {"status": "SOFTWARE READY", "exports": results}
+
+
+def train_volume_models_stage(
+    config: PaperRunConfig, *, allow_historical_training: bool
+) -> dict[str, object]:
+    """Train the exact validation-only LightGBM grid for all locked feature rows."""
+    if not allow_historical_training:
+        raise PermissionError("Historical LightGBM fitting requires separate authorization.")
+    from execsim.data.paper.manifests import write_json_atomic
+    from execsim.ml.models.lightgbm_adapter import (
+        LightGBMConfig,
+        LightGBMVolumeModel,
+        run_lightgbm_grid,
+    )
+    from execsim.ml.paper.lightgbm_data import build_lightgbm_frames
+
+    universe = read_json(Path(config.data["universe_manifest"]))
+    liquidity = {
+        str(member["instrument_id"]): int(member["liquidity_group"])
+        for member in universe["members"]
+    }
+    results = []
+    lightgbm_candidates = tuple(
+        LightGBMConfig(
+            num_leaves=int(leaves),
+            min_child_samples=int(child),
+            reg_lambda=float(l2),
+            learning_rate=float(config.lightgbm["learning_rate"]),
+            n_estimators=int(config.lightgbm["n_estimators"]),
+            early_stopping_rounds=int(config.lightgbm["early_stopping_rounds"]),
+            feature_fraction=float(config.lightgbm["feature_fraction"]),
+            bagging_fraction=float(config.lightgbm["bagging_fraction"]),
+            bagging_freq=int(config.lightgbm["bagging_freq"]),
+        )
+        for leaves in config.lightgbm["num_leaves"]
+        for child in config.lightgbm["min_child_samples"]
+        for l2 in config.lightgbm["reg_lambda"]
+    )
+    for fold in config.evaluation["folds"]:
+        fold_id = str(fold["id"])
+        sequence = config.artifact_root / "sequences" / fold_id / "sequence-manifest.json"
+        variants: list[tuple[str, int | None, Path | None]] = [("raw", None, None)]
+        variants.append(("untrained_neural", None, None))
+        for name in ("dense", "sparse"):
+            variants.extend(
+                (name, int(seed), config.artifact_root / "embeddings" / fold_id / name / str(seed))
+                for seed in config.representation["seeds"]
+            )
+        for method, seed, embedding_root in variants:
+            output = config.artifact_root / "lightgbm" / fold_id / method / str(seed or "shared")
+            if (output / "manifest.json").is_file():
+                _, metadata = LightGBMVolumeModel.load_native(output)
+                expected_metadata = {
+                    "fold_id": fold_id,
+                    "paper_config_hash": config.config_hash,
+                    "sequence_manifest_hash": file_sha256(sequence),
+                    "method": method,
+                    "seed": seed,
+                }
+                mismatches = [
+                    name for name, value in expected_metadata.items() if metadata.get(name) != value
+                ]
+                if mismatches:
+                    raise ValueError(f"Reusable LightGBM identity mismatch: {sorted(mismatches)}")
+                results.append(
+                    {"fold_id": fold_id, "method": method, "seed": seed, "status": "reused"}
+                )
+                continue
+            train_embedding = (
+                embedding_root / "partition=train" / "embeddings.parquet"
+                if embedding_root is not None
+                else None
+            )
+            validation_embedding = (
+                embedding_root / "partition=validation" / "embeddings.parquet"
+                if embedding_root is not None
+                else None
+            )
+            training = build_lightgbm_frames(
+                sequence,
+                partition="train",
+                liquidity_groups=liquidity,
+                embedding_path=train_embedding,
+            )
+            validation = build_lightgbm_frames(
+                sequence,
+                partition="validation",
+                liquidity_groups=liquidity,
+                embedding_path=validation_embedding,
+            )
+            if method == "untrained_neural":
+                training = _append_untrained_control(training, fold_seed=13)
+                validation = _append_untrained_control(validation, fold_seed=13)
+            model, candidates = run_lightgbm_grid(
+                training,
+                validation,
+                categorical_features=tuple(config.lightgbm["categorical_features"]),
+                seed=int(seed or 13),
+                candidate_configs=tuple(
+                    LightGBMConfig(**{**asdict(item), "seed": int(seed or 13)})
+                    for item in lightgbm_candidates
+                ),
+            )
+            metadata = {
+                "fold_id": fold_id,
+                "feature_schema_version": "paper-lgbm-residual-long-shape-v2",
+                "training_cutoff": str(fold["train"][1]),
+                "validation_range": [str(value) for value in fold["validation"]],
+                "categorical_features": config.lightgbm["categorical_features"],
+                "paper_config_hash": config.config_hash,
+                "sequence_manifest_hash": file_sha256(sequence),
+                "method": method,
+                "seed": seed,
+            }
+            model.save_native(output, metadata)
+            write_json_atomic(
+                output / "grid-results.json",
+                {
+                    "candidates": [
+                        {
+                            **asdict(item),
+                            "config": asdict(item.config),
+                        }
+                        for item in candidates
+                    ],
+                    "selected_scale_config": asdict(model.scale_config),
+                    "selected_shape_config": asdict(model.shape_config),
+                    "selection_data": "validation_only",
+                },
+            )
+            results.append(
+                {"fold_id": fold_id, "method": method, "seed": seed, "artifact": str(output)}
+            )
+    selection_receipt = config.artifact_root / "selection" / "rdm-lambda.json"
+    model_manifests = sorted((config.artifact_root / "lightgbm").glob("*/*/*/manifest.json"))
+    expected_model_count = len(config.evaluation["folds"]) * (
+        2 + 2 * len(config.representation["seeds"])
+    )
+    if len(model_manifests) != expected_model_count:
+        raise RuntimeError(
+            "BLOCKED: parameter freeze requires the complete validation-selected LightGBM matrix."
+        )
+    freeze_path = config.artifact_root / "selection" / "parameter-freeze-v1.json"
+    freeze_payload = {
+        "schema_version": "paper-parameter-selection-freeze-v1",
+        "status": "PARAMETERS_FROZEN",
+        "frozen_at_utc": datetime.now(UTC).isoformat(),
+        "git_commit": _git_head(),
+        "paper_config_hash": config.config_hash,
+        "rdm_lambda_receipt_sha256": file_sha256(selection_receipt),
+        "selected_rdm_lambda": read_json(selection_receipt)["selected_rdm_lambda"],
+        "lightgbm_manifests": [
+            {
+                "path": str(path.relative_to(config.artifact_root)).replace("\\", "/"),
+                "sha256": file_sha256(path),
+            }
+            for path in model_manifests
+        ],
+        "test_or_tca_used": False,
+    }
+    if freeze_path.is_file():
+        existing_freeze = read_json(freeze_path)
+        comparable = {
+            name: value for name, value in freeze_payload.items() if name != "frozen_at_utc"
+        }
+        existing_comparable = {
+            name: value for name, value in existing_freeze.items() if name != "frozen_at_utc"
+        }
+        if existing_comparable != comparable:
+            raise ValueError(
+                "Existing parameter-selection freeze does not match current artifacts."
+            )
+    else:
+        write_json_atomic(freeze_path, freeze_payload)
+    return {
+        "status": "SOFTWARE READY",
+        "models": results,
+        "parameter_freeze": str(freeze_path),
+    }
+
+
+def evaluate_forecasts_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Evaluate frozen LightGBM artifacts on locked test rows without model selection."""
+    _require_parameter_freeze(config)
+    from execsim.forecasting import HistoricalProfileForecaster
+    from execsim.ml.models.lightgbm_adapter import LightGBMVolumeModel
+    from execsim.ml.paper.lightgbm_data import build_lightgbm_frames
+
+    universe = read_json(Path(config.data["universe_manifest"]))
+    liquidity = {
+        str(member["instrument_id"]): int(member["liquidity_group"])
+        for member in universe["members"]
+    }
+    bars = _load_parquet_corpus(Path(config.data["target_corpus_root"]))
+    ewma = HistoricalProfileForecaster(bars, estimator="ewma", lookback_sessions=20)
+    output_rows = []
+    for fold in config.evaluation["folds"]:
+        fold_id = str(fold["id"])
+        sequence = config.artifact_root / "sequences" / fold_id / "sequence-manifest.json"
+        variants: list[tuple[str, int | None, Path | None]] = [
+            ("raw", None, None),
+            ("untrained_neural", None, None),
+        ]
+        for name in ("dense", "sparse"):
+            variants.extend(
+                (name, int(seed), config.artifact_root / "embeddings" / fold_id / name / str(seed))
+                for seed in config.representation["seeds"]
+            )
+        raw_frames = None
+        for method, seed, embedding_root in variants:
+            embedding = (
+                embedding_root / "partition=test" / "embeddings.parquet"
+                if embedding_root is not None
+                else None
+            )
+            frames = build_lightgbm_frames(
+                sequence,
+                partition="test",
+                liquidity_groups=liquidity,
+                embedding_path=embedding,
+            )
+            if method == "raw":
+                raw_frames = frames
+            if method == "untrained_neural":
+                frames = _append_untrained_control(frames, fold_seed=13)
+            model_root = (
+                config.artifact_root / "lightgbm" / fold_id / method / str(seed or "shared")
+            )
+            model, metadata = LightGBMVolumeModel.load_native(model_root)
+            if metadata.get("paper_config_hash") != config.config_hash:
+                raise ValueError(f"LightGBM config identity mismatch: {model_root}")
+            totals, predicted_shape = model.predict_frames(
+                frames[0], frames[2], group_columns=("case_id",)
+            )
+            actual_shape = frames[2].loc[:, ["case_id", "target_bucket"]].copy()
+            actual_shape["actual_share"] = frames[3]
+            shape_joined = actual_shape.merge(
+                predicted_shape,
+                on=["case_id", "target_bucket"],
+                validate="one_to_one",
+            )
+            shape_error = {
+                str(case_id): float(
+                    np.mean(
+                        np.abs(
+                            np.cumsum(group.sort_values("target_bucket")["actual_share"])
+                            - np.cumsum(group.sort_values("target_bucket")["conditional_share"])
+                        )
+                    )
+                )
+                for case_id, group in shape_joined.groupby("case_id", sort=False)
+            }
+            for index, row in frames[0].reset_index(drop=True).iterrows():
+                output_rows.append(
+                    {
+                        "fold_id": fold_id,
+                        "method": method,
+                        "seed": seed,
+                        "sample_id": row["sample_id"],
+                        "instrument_id": row["instrument_id"],
+                        "session_date": row["session_date"],
+                        "as_of_token": int(row["as_of"]),
+                        "actual_remaining_volume": float(frames[1][index]),
+                        "causal_baseline_remaining_volume": float(row["baseline_remaining_volume"]),
+                        "predicted_remaining_volume": float(totals[index]),
+                        "log_remaining_volume_absolute_error": abs(
+                            np.log1p(float(totals[index])) - np.log1p(float(frames[1][index]))
+                        ),
+                        "conditional_curve_wasserstein": shape_error[str(row["sample_id"])],
+                    }
+                )
+        if raw_frames is None:
+            raise RuntimeError("Raw forecast rows were not constructed.")
+        shape_by_case = pd.DataFrame(
+            {
+                "case_id": raw_frames[2]["case_id"].astype(str),
+                "target_bucket": raw_frames[2]["target_bucket"].astype(int),
+                "actual_share": raw_frames[3],
+            }
+        )
+        for index, row in raw_frames[0].reset_index(drop=True).iterrows():
+            day = pd.Timestamp(row["session_date"]).date()
+            generated = pd.Timestamp.combine(day, pd.Timestamp("09:30").time()).tz_localize(
+                "America/New_York"
+            ) + pd.Timedelta(minutes=15 * int(row["as_of"]))
+            minutes = tuple(
+                pd.date_range(
+                    generated,
+                    pd.Timestamp.combine(day, pd.Timestamp("15:59").time()).tz_localize(
+                        "America/New_York"
+                    ),
+                    freq="min",
+                )
+            )
+            forecast = ewma.forecast(
+                symbol=str(row["symbol"]),
+                session_date=day,
+                generated_at=generated,
+                bucket_timestamps=minutes,
+            )
+            predicted_tokens = np.asarray(forecast.expected_volumes).reshape(-1, 15).sum(axis=1)
+            predicted_shape = predicted_tokens / predicted_tokens.sum()
+            actual = shape_by_case.loc[
+                shape_by_case["case_id"] == str(row["sample_id"])
+            ].sort_values("target_bucket")
+            actual_shape = actual["actual_share"].to_numpy(dtype=float)
+            output_rows.append(
+                {
+                    "fold_id": fold_id,
+                    "method": "ewma",
+                    "seed": None,
+                    "sample_id": row["sample_id"],
+                    "instrument_id": row["instrument_id"],
+                    "session_date": row["session_date"],
+                    "as_of_token": int(row["as_of"]),
+                    "actual_remaining_volume": float(raw_frames[1][index]),
+                    "causal_baseline_remaining_volume": float(row["baseline_remaining_volume"]),
+                    "predicted_remaining_volume": float(forecast.expected_remaining_volume),
+                    "log_remaining_volume_absolute_error": abs(
+                        np.log1p(forecast.expected_remaining_volume)
+                        - np.log1p(float(raw_frames[1][index]))
+                    ),
+                    "conditional_curve_wasserstein": float(
+                        np.mean(np.abs(np.cumsum(predicted_shape) - np.cumsum(actual_shape)))
+                    ),
+                }
+            )
+    output = pd.DataFrame(output_rows)
+    destination = config.artifact_root / "evaluation" / "forecast-results.parquet"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    output.to_parquet(destination, index=False)
+    from execsim.data.paper.manifests import write_json_atomic
+
+    write_json_atomic(
+        destination.with_suffix(".manifest.json"),
+        {
+            "schema_version": "paper-forecast-evaluation-v1",
+            "paper_config_hash": config.config_hash,
+            "rows": len(output),
+            "parquet_sha256": file_sha256(destination),
+        },
+    )
+    return {"status": "SOFTWARE READY", "rows": len(output), "artifact": str(destination)}
+
+
+def evaluate_representations_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Run the frozen capacity ladder, observable probe, and exploratory support analysis."""
+    _require_parameter_freeze(config)
+    import json
+
+    import torch
+
+    from execsim.ml.paper.lightgbm_data import build_historical_baseline_regime_frame
+    from execsim.ml.paper.regimes import (
+        fit_unusual_session_thresholds,
+        label_unusual_sessions,
+    )
+    from execsim.ml.representations.checkpoints import load_checkpoint
+    from execsim.ml.representations.diagnostics import representation_diagnostics
+    from execsim.ml.representations.frozen_evaluation import (
+        FrozenProbeOptions,
+        evaluate_frozen_capacity_streaming,
+    )
+    from execsim.ml.representations.jepa import PredictiveRepresentationModel
+    from execsim.ml.representations.schemas import CheckpointCompatibility, RepresentationConfig
+    from execsim.ml.sequences.streaming import PaperSequenceDataset, build_sequence_dataloader
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    accessibility_rows: list[dict[str, object]] = []
+    support_rows: list[dict[str, object]] = []
+    for fold in config.evaluation["folds"]:
+        fold_id = str(fold["id"])
+        sequence = config.artifact_root / "sequences" / fold_id / "sequence-manifest.json"
+        training_states = build_historical_baseline_regime_frame(sequence, partition="train")
+        test_states = label_unusual_sessions(
+            build_historical_baseline_regime_frame(sequence, partition="test"),
+            fit_unusual_session_thresholds(training_states),
+        )
+        for method in ("dense", "sparse"):
+            for seed in config.representation["seeds"]:
+                checkpoint_root = (
+                    config.artifact_root / "representations" / fold_id / method / str(seed)
+                )
+                expected = CheckpointCompatibility(
+                    **read_json(checkpoint_root / "compatibility.json")
+                )
+                representation = RepresentationConfig(
+                    expected.geometry,
+                    predictor_family=expected.predictor_family,
+                    generalized_gaussian_p=expected.generalized_gaussian_p,
+                    generalized_gaussian_mu=expected.generalized_gaussian_mu,
+                    generalized_gaussian_sigma=expected.generalized_gaussian_sigma,
+                    rdm_projections_train=expected.rdm_projections,
+                    rdm_projections_evaluation=int(
+                        config.representation["rdm_projections_evaluation"]
+                    ),
+                    seed=int(seed),
+                )
+                model = PredictiveRepresentationModel(representation).to(device)
+                load_checkpoint(model, checkpoint_root / "final", expected=expected)
+
+                def loader(
+                    partition: str,
+                    *,
+                    manifest_path: Path = sequence,
+                    run_seed: int = int(seed),
+                ) -> Any:
+                    dataset = PaperSequenceDataset(
+                        manifest_path,
+                        partition=partition,
+                        seed=run_seed,
+                        cache_size=int(config.sequences["session_cache_size"]),
+                        sample_train_positions=False,
+                    )
+                    return build_sequence_dataloader(
+                        dataset,
+                        batch_size=int(config.representation["batch_size"]),
+                        num_workers=int(config.sequences["num_workers"]),
+                        device=device,
+                        prefetch_factor=int(config.sequences["prefetch_factor"]),
+                    )
+
+                capacity, observable = evaluate_frozen_capacity_streaming(
+                    model,
+                    loader("train"),
+                    loader("validation"),
+                    loader("test"),
+                    device=device,
+                    seed=int(seed),
+                    options=FrozenProbeOptions(
+                        ridge_alphas=tuple(
+                            float(value) for value in config.representation["probe_ridge_alphas"]
+                        ),
+                        mlp_epochs=int(config.representation["probe_mlp_epochs"]),
+                    ),
+                )
+                observable_by_horizon = {int(row["horizon"]): row for row in observable}
+                embedding_root = config.artifact_root / "embeddings" / fold_id / method / str(seed)
+                test_embeddings = pd.read_parquet(
+                    embedding_root / "partition=test" / "embeddings.parquet"
+                )
+                test_join = test_states.merge(
+                    test_embeddings[["sample_id", "session_id", "embedding"]],
+                    on="sample_id",
+                    validate="one_to_one",
+                ).sort_values(["instrument_id", "session_date", "as_of_token"], kind="stable")
+                test_latent = np.stack(test_join["embedding"].map(np.asarray))[:, :128]
+                diagnostics = representation_diagnostics(test_latent)
+                for row in capacity:
+                    horizon = int(row["horizon"])
+                    accessibility_rows.append(
+                        {
+                            "fold_id": fold_id,
+                            "geometry": method,
+                            "seed": int(seed),
+                            **row,
+                            **observable_by_horizon[horizon],
+                            "zero_fraction": diagnostics["zero_fraction"],
+                            "mean_active_dimensions": diagnostics["mean_active_dimensions"],
+                        }
+                    )
+                if method == "sparse":
+                    transitions = _grouped_support_transitions(
+                        test_join["session_id"].to_numpy(),
+                        test_latent,
+                        test_join["regime"].to_numpy(),
+                    )
+                    support_rows.append(
+                        {
+                            "fold_id": fold_id,
+                            "geometry": method,
+                            "seed": int(seed),
+                            **diagnostics,
+                            **{
+                                name: json.dumps(value, sort_keys=True)
+                                if isinstance(value, dict)
+                                else value
+                                for name, value in transitions.items()
+                            },
+                            "ordinary_rows": int((test_join["regime"] == "ordinary").sum()),
+                            "unusual_rows": int((test_join["regime"] == "unusual").sum()),
+                        }
+                    )
+    output_root = config.artifact_root / "evaluation"
+    output_root.mkdir(parents=True, exist_ok=True)
+    accessibility_path = output_root / "representation-accessibility.parquet"
+    support_path = output_root / "support-regimes.parquet"
+    pd.DataFrame(accessibility_rows).to_parquet(accessibility_path, index=False)
+    pd.DataFrame(support_rows).to_parquet(support_path, index=False)
+    from execsim.data.paper.manifests import write_json_atomic
+
+    write_json_atomic(
+        output_root / "representation-evaluation-manifest.json",
+        {
+            "schema_version": "paper-representation-evaluation-v2",
+            "paper_config_hash": config.config_hash,
+            "accessibility_sha256": file_sha256(accessibility_path),
+            "support_regimes_sha256": file_sha256(support_path),
+        },
+    )
+    return {
+        "status": "SOFTWARE READY",
+        "accessibility": str(accessibility_path),
+        "support_regimes": str(support_path),
+    }
+
+
+def run_tca_stage(config: PaperRunConfig, source: Path | None = None) -> dict[str, object]:
+    """Run main, seed-specific, and 1%/5% ADV matched historical TCA outputs."""
+    _require_parameter_freeze(config)
+    from execsim.forecasting import HistoricalProfileForecaster
+    from execsim.ml.models.lightgbm_adapter import LightGBMVolumeModel
+    from execsim.ml.paper.forecast_provider import PaperLightGBMForecastProvider
+    from execsim.ml.paper.lightgbm_data import build_lightgbm_frames
+    from execsim.ml.paper.tca import PAPER_METHODS, run_historical_tca
+
+    bars = _load_parquet_corpus(source or Path(config.data["target_corpus_root"]))
+    universe_payload = read_json(Path(config.data["universe_manifest"]))
+    universe = pd.DataFrame(universe_payload["members"])
+    liquidity = dict(
+        zip(
+            universe["instrument_id"].astype(str),
+            universe["liquidity_group"].astype(int),
+            strict=True,
+        )
+    )
+    adv20 = _causal_adv20(bars)
+    main_outputs = []
+    sensitivity_outputs = []
+    for fold in config.evaluation["folds"]:
+        fold_id = str(fold["id"])
+        start, end = (pd.Timestamp(value).date() for value in fold["test"])
+        local_dates = pd.to_datetime(bars["timestamp"]).dt.tz_convert("America/New_York").dt.date
+        test_bars = bars.loc[(local_dates >= start) & (local_dates <= end)].copy()
+        sequence = config.artifact_root / "sequences" / fold_id / "sequence-manifest.json"
+        frames: dict[tuple[str, int | None], tuple[pd.DataFrame, Any, pd.DataFrame, Any]] = {}
+        models: dict[tuple[str, int | None], LightGBMVolumeModel] = {}
+        variants: list[tuple[str, int | None, Path | None]] = [
+            ("raw", None, None),
+            ("untrained_neural", None, None),
+        ]
+        for name in ("dense", "sparse"):
+            variants.extend(
+                (name, int(seed), config.artifact_root / "embeddings" / fold_id / name / str(seed))
+                for seed in config.representation["seeds"]
+            )
+        for method, seed, embedding_root in variants:
+            embedding = (
+                embedding_root / "partition=test" / "embeddings.parquet"
+                if embedding_root is not None
+                else None
+            )
+            built = build_lightgbm_frames(
+                sequence, partition="test", liquidity_groups=liquidity, embedding_path=embedding
+            )
+            if method == "untrained_neural":
+                built = _append_untrained_control(built, fold_seed=13)
+            frames[(method, seed)] = built
+            models[(method, seed)] = LightGBMVolumeModel.load_native(
+                config.artifact_root / "lightgbm" / fold_id / method / str(seed or "shared")
+            )[0]
+        ewma = HistoricalProfileForecaster(bars, estimator="ewma", lookback_sessions=20)
+        fold_frames = frames
+        fold_models = models
+        training_cutoff_value = pd.Timestamp(fold["train"][1]).date()
+        sequence_hash_value = file_sha256(sequence)
+
+        def learned(
+            method: str,
+            seed: int | None,
+            instrument_id: str,
+            session_date: date,
+            fold_frames: dict[
+                tuple[str, int | None], tuple[pd.DataFrame, Any, pd.DataFrame, Any]
+            ] = fold_frames,
+            fold_models: dict[tuple[str, int | None], LightGBMVolumeModel] = fold_models,
+            training_cutoff: date = training_cutoff_value,
+            sequence_hash: str = sequence_hash_value,
+        ) -> Any:
+            scale, _, shape, _ = fold_frames[(method, seed)]
+            profile = _within_token_profile(bars, instrument_id, training_cutoff)
+            return PaperLightGBMForecastProvider(
+                fold_models[(method, seed)],
+                feature_resolver=_feature_resolver(scale, shape, instrument_id),
+                within_token_profile=profile,
+                training_cutoff=training_cutoff,
+                manifest_hash=sequence_hash,
+                method_id=f"{method}-{seed or 'shared'}",
+            )
+
+        providers: dict[str, Any] = {
+            "ewma": lambda _instrument, _date, ewma=ewma: ewma,
+            "lightgbm_raw": lambda instrument, day: learned("raw", None, instrument, day),
+            "raw_untrained_neural": lambda instrument, day: learned(
+                "untrained_neural", None, instrument, day
+            ),
+        }
+        for geometry in ("dense", "sparse"):
+            for seed in config.representation["seeds"]:
+                providers[f"raw_{geometry}_jepa_seed_{seed}"] = (
+                    lambda instrument, day, geometry=geometry, seed=int(seed): learned(
+                        geometry, seed, instrument, day
+                    )
+                )
+
+        def configured_tca(
+            active_providers: dict[str, Any],
+            *,
+            required_methods: tuple[str, ...] = PAPER_METHODS,
+            liquidity_size: int = int(config.tca["universe_size"]),
+            order_fraction: float = float(config.tca["quantity_fraction_adv20"]),
+            _test_bars: pd.DataFrame = test_bars,
+        ) -> pd.DataFrame:
+            return run_historical_tca(
+                _test_bars,
+                universe,
+                adv20,
+                active_providers,
+                liquidity_size=liquidity_size,
+                order_fraction=order_fraction,
+                required_methods=required_methods,
+                start=str(config.tca["window"][0]),
+                end=str(config.tca["window"][1]),
+                planned_participation=float(config.tca["planned_participation_rate"]),
+                hard_participation=float(config.tca["hard_participation_rate"]),
+                risk_aversion=float(config.tca["risk_aversion"]),
+                tracking_penalty=float(config.tca["tracking_penalty"]),
+                half_spread_arrival_fraction=float(config.tca["half_spread_arrival_fraction"]),
+                temporary_impact_arrival_fraction=float(
+                    config.tca["temporary_impact_at_full_participation"]
+                ),
+            )
+
+        main = configured_tca(providers)
+        main.insert(0, "fold_id", fold_id)
+        main_outputs.append(main)
+        for fraction in config.tca["sensitivity_quantity_fraction_adv20"]:
+            sensitivity = configured_tca(
+                providers,
+                liquidity_size=int(config.tca["sensitivity_universe_size"]),
+                order_fraction=float(fraction),
+                required_methods=PAPER_METHODS,
+            )
+            sensitivity.insert(0, "fold_id", fold_id)
+            sensitivity_outputs.append(sensitivity)
+    output_root = config.artifact_root / "tca"
+    output_root.mkdir(parents=True, exist_ok=True)
+    paths = {}
+    for name, parts in (
+        ("main", main_outputs),
+        ("sensitivity", sensitivity_outputs),
+    ):
+        path = output_root / f"{name}.parquet"
+        pd.concat(parts, ignore_index=True).to_parquet(path, index=False)
+        paths[name] = str(path)
+    from execsim.data.paper.manifests import write_json_atomic
+
+    write_json_atomic(
+        output_root / "manifest.json",
+        {
+            "schema_version": "paper-tca-v1",
+            "paper_config_hash": config.config_hash,
+            "files": {
+                name: {"path": path, "sha256": file_sha256(Path(path))}
+                for name, path in paths.items()
+            },
+        },
+    )
+    return {"status": "SOFTWARE READY", **paths}
+
+
+def report_stage(config: PaperRunConfig) -> dict[str, object]:
+    """Construct named historical tables, matched inference, and the real report bundle."""
+    _require_parameter_freeze(config)
+    from execsim.ml.paper.reports import (
+        FIGURE_NAMES,
+        TABLE_NAMES,
+        write_historical_paper_bundle,
+    )
+    from execsim.ml.paper.statistics import (
+        construct_complete_case_differences,
+        moving_block_bootstrap,
+    )
+
+    existing = config.report_root / config.paper_run_id
+    if existing.exists():
+        if not (existing / "provenance.json").is_file():
+            raise RuntimeError("BLOCKED: existing historical report has no provenance receipt.")
+        provenance = read_json(existing / "provenance.json")
+        required = [existing / "tables" / f"{name}.parquet" for name in TABLE_NAMES]
+        required.extend(existing / "figures" / f"{name}.png" for name in FIGURE_NAMES)
+        required.extend(
+            (
+                existing / "appendix" / "bootstrap-block-sensitivity.parquet",
+                existing / "appendix" / "support-regimes.parquet",
+            )
+        )
+        if (
+            provenance.get("paper_config_hash") != config.config_hash
+            or provenance.get("data_classification") != "historical"
+            or not all(path.is_file() for path in required)
+        ):
+            raise ValueError("Existing historical report bundle is incomplete or incompatible.")
+        return {"status": "SOFTWARE READY", "output": str(existing), "reuse": "validated"}
+    report_inputs = {
+        "forecast": config.artifact_root / "evaluation" / "forecast-results.parquet",
+        "tca": config.artifact_root / "tca" / "main.parquet",
+        "accessibility": config.artifact_root
+        / "evaluation"
+        / "representation-accessibility.parquet",
+        "support": config.artifact_root / "evaluation" / "support-regimes.parquet",
+    }
+    if missing := [name for name, path in report_inputs.items() if not path.is_file()]:
+        raise RuntimeError(f"BLOCKED: historical report inputs are missing: {missing}")
+    forecast = pd.read_parquet(report_inputs["forecast"])
+    tca = pd.read_parquet(report_inputs["tca"])
+    accessibility = pd.read_parquet(report_inputs["accessibility"])
+    identity = (
+        "fold_id",
+        "date",
+        "instrument_id",
+        "order_fraction_adv20",
+        "parent_quantity",
+        "side",
+        "start",
+        "end",
+        "planned_participation",
+        "hard_participation",
+        "risk_aversion",
+        "tracking_penalty",
+    )
+    execution_rows = []
+    bootstrap_sensitivity_rows = []
+    for candidate in sorted(set(tca["method"].astype(str))):
+        if candidate.startswith("raw_sparse_jepa_seed_"):
+            baseline = candidate.replace("raw_sparse_jepa", "raw_dense_jepa")
+        else:
+            baseline = "lightgbm_raw"
+        paired = construct_complete_case_differences(
+            tca,
+            baseline=baseline,
+            candidate=candidate,
+            value_column="normalized_allocation_regret",
+            identity_columns=identity,
+        )
+        by_date = paired.paired_rows.groupby(["fold_id", "date"], sort=True, as_index=False)[
+            "difference"
+        ].mean()
+        sensitivity_results = {}
+        for block_length in (
+            int(config.evaluation["bootstrap_block_dates"]),
+            *(int(value) for value in config.evaluation["bootstrap_block_sensitivity_dates"]),
+        ):
+            block_result = moving_block_bootstrap(
+                by_date,
+                block_length=block_length,
+                repetitions=int(config.evaluation["bootstrap_repetitions"]),
+                confidence=float(config.evaluation["confidence"]),
+            )
+            sensitivity_results[block_length] = block_result
+            bootstrap_sensitivity_rows.append(
+                {
+                    "candidate": candidate,
+                    "baseline": baseline,
+                    "block_length_dates": block_length,
+                    "mean_difference": block_result.mean_difference,
+                    "ci_lower": block_result.confidence_interval[0],
+                    "ci_upper": block_result.confidence_interval[1],
+                    "paired_dates": block_result.paired_dates,
+                }
+            )
+        result = sensitivity_results[int(config.evaluation["bootstrap_block_dates"])]
+        candidate_rows = tca.loc[tca["method"] == candidate]
+        seed_text = candidate.rsplit("_seed_", maxsplit=1)
+        seed = int(seed_text[1]) if len(seed_text) == 2 else -1
+        execution_rows.append(
+            {
+                "method": candidate,
+                "comparison_baseline": baseline,
+                "seed": seed,
+                "normalized_allocation_regret": float(
+                    candidate_rows["normalized_allocation_regret"].mean()
+                ),
+                "absolute_modeled_impact_cost": float(
+                    candidate_rows["absolute_modeled_impact_cost"].mean()
+                ),
+                "completion_rate": float(candidate_rows["completion_rate"].mean()),
+                "implementation_shortfall_bps": float(
+                    candidate_rows["implementation_shortfall_bps"].mean()
+                ),
+                "mean_difference": result.mean_difference,
+                "ci_lower": result.confidence_interval[0],
+                "ci_upper": result.confidence_interval[1],
+                "matched_cases": paired.matched_rows,
+                "dropped_baseline": paired.dropped_baseline_rows,
+                "dropped_candidate": paired.dropped_candidate_rows,
+            }
+        )
+    forecast = forecast.copy()
+    forecast["method_key"] = np.where(
+        forecast["seed"].isna(),
+        forecast["method"].astype(str),
+        forecast["method"].astype(str) + "_seed_" + forecast["seed"].astype("Int64").astype(str),
+    )
+    if forecast.duplicated(["method_key", "fold_id", "sample_id"]).any():
+        raise ValueError("Forecast evaluation duplicates a method/case identity.")
+    case_sets = [
+        set(group["fold_id"].astype(str) + "|" + group["sample_id"].astype(str))
+        for _, group in forecast.groupby("method_key", sort=True)
+    ]
+    if not case_sets:
+        raise ValueError("Forecast evaluation contains no method rows.")
+    common_cases = set.intersection(*case_sets)
+    forecast["case_key"] = forecast["fold_id"].astype(str) + "|" + forecast["sample_id"].astype(str)
+    matched_forecast = forecast.loc[forecast["case_key"].isin(common_cases)]
+    forecasting = (
+        matched_forecast.groupby(["method", "seed", "as_of_token"], dropna=False, as_index=False)
+        .agg(
+            log_remaining_volume_mae=("log_remaining_volume_absolute_error", "mean"),
+            conditional_curve_error=("conditional_curve_wasserstein", "mean"),
+            matched_cases=("sample_id", "size"),
+            causal_baseline_remaining_volume=("causal_baseline_remaining_volume", "mean"),
+        )
+        .sort_values(["method", "seed", "as_of_token"], kind="stable")
+    )
+    dataset_rows = []
+    for fold in config.evaluation["folds"]:
+        manifest = read_json(
+            config.artifact_root / "sequences" / str(fold["id"]) / "sequence-manifest.json"
+        )
+        for partition, included in manifest["partition_counts"].items():
+            dataset_rows.append(
+                {
+                    "fold_id": fold["id"],
+                    "partition": partition,
+                    "included": int(included),
+                    "excluded": len(manifest["exclusions"]),
+                }
+            )
+    tables = {
+        "dataset_folds_exclusions": pd.DataFrame(dataset_rows),
+        "representation_accessibility": accessibility,
+        "forecasting": forecasting,
+        "execution": pd.DataFrame(execution_rows),
+    }
+    output = write_historical_paper_bundle(
+        config.report_root,
+        paper_run_id=config.paper_run_id,
+        tables=tables,
+        provenance={
+            "data_classification": "historical",
+            "paper_config_hash": config.config_hash,
+            "network_acquisition": "completed before this reporting stage",
+            "historical_training": "completed before this reporting stage",
+            "empirical_claim": "not automatically generated",
+        },
+    )
+    appendix = output / "appendix"
+    appendix.mkdir()
+    pd.DataFrame(bootstrap_sensitivity_rows).to_parquet(
+        appendix / "bootstrap-block-sensitivity.parquet", index=False
+    )
+    support = pd.read_parquet(report_inputs["support"])
+    support.to_parquet(appendix / "support-regimes.parquet", index=False)
+    return {"status": "SOFTWARE READY", "output": str(output)}
+
+
+def _adapt_sparse_stage(config: PaperRunConfig, options: Any) -> list[dict[str, object]]:
+    from dataclasses import replace
+    from functools import partial
+
+    import torch
+
+    from execsim.data.paper.manifests import write_json_atomic
+    from execsim.ml.representations.checkpoints import load_checkpoint, save_checkpoint
+    from execsim.ml.representations.diagnostics import sparse_acceptance
+    from execsim.ml.representations.difficulty_pipeline import build_difficulty_ledger
+    from execsim.ml.representations.historical_trainer import (
+        _loader,
+        _validate,
+        adapt_with_difficulty_loader,
+    )
+    from execsim.ml.representations.jepa import PredictiveRepresentationModel
+    from execsim.ml.representations.schemas import CheckpointCompatibility, RepresentationConfig
+    from execsim.ml.sequences.streaming import PaperSequenceDataset
+
+    results = []
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    for fold in config.evaluation["folds"]:
+        fold_id = str(fold["id"])
+        sequence_path = config.artifact_root / "sequences" / fold_id / "sequence-manifest.json"
+        ledger_path = config.artifact_root / "difficulty" / fold_id / "training.parquet"
+        ledger = (
+            pd.read_parquet(ledger_path)
+            if ledger_path.is_file()
+            else build_difficulty_ledger(sequence_path, ledger_path)
+        )
+        if (
+            ledger.empty
+            or ledger["sample_id"].duplicated().any()
+            or set(ledger["fold_id"].astype(str)) != {fold_id}
+            or set(ledger["paper_config_hash"].astype(str)) != {config.config_hash}
+            or set(ledger["sequence_manifest_hash"].astype(str)) != {file_sha256(sequence_path)}
+        ):
+            raise ValueError("Reusable difficulty ledger identity is incompatible.")
+        weights = dict(zip(ledger["sample_id"].astype(str), ledger["weight"], strict=True))
+        for seed in config.representation["seeds"]:
+            base = config.artifact_root / "representations" / fold_id / "sparse" / str(seed)
+            adapted = (
+                config.artifact_root / "representations" / fold_id / "sparse_adapted" / str(seed)
+            )
+            expected = CheckpointCompatibility(**read_json(base / "compatibility.json"))
+            model_config = RepresentationConfig(
+                "sparse",
+                predictor_family=expected.predictor_family,
+                generalized_gaussian_p=expected.generalized_gaussian_p,
+                generalized_gaussian_mu=expected.generalized_gaussian_mu,
+                generalized_gaussian_sigma=expected.generalized_gaussian_sigma,
+                rdm_projections_train=expected.rdm_projections,
+                rdm_projections_evaluation=int(config.representation["rdm_projections_evaluation"]),
+                seed=int(seed),
+            )
+            model = PredictiveRepresentationModel(model_config).to(device)
+            adapted_hash = stable_hash(
+                {
+                    "base_training_config_hash": expected.training_config_hash,
+                    "adaptation": "difficulty-v1",
+                }
+            )
+            adapted_expected = replace(
+                expected, training_config_hash=adapted_hash, adaptation="difficulty-v1"
+            )
+            if (adapted / "final" / "manifest.json").is_file():
+                recorded = CheckpointCompatibility(**read_json(adapted / "compatibility.json"))
+                if recorded != adapted_expected:
+                    raise ValueError("Reusable adapted checkpoint identity mismatch.")
+                loaded = load_checkpoint(model, adapted / "final", expected=adapted_expected)
+                if loaded.seed != int(seed):
+                    raise ValueError("Reusable adapted checkpoint seed does not match the run.")
+                results.append({"fold_id": fold_id, "seed": seed, "status": "reused"})
+                continue
+            base_manifest = load_checkpoint(model, base / "final", expected=expected)
+            dataset = PaperSequenceDataset(
+                sequence_path, partition="train", seed=int(seed), cache_size=options.cache_size
+            )
+            training_result = read_json(base / "training-result.json")
+            loader_factory = partial(_loader, dataset, options, device)
+            steps = adapt_with_difficulty_loader(
+                model,
+                loader_factory,
+                weights,
+                actual_base_training_steps=int(training_result["global_steps"]),
+                rdm_lambda=expected.calibrated_rdm_lambda,
+                seed=int(seed) + 4_000_001,
+                device=device,
+            )
+            validation = PaperSequenceDataset(
+                sequence_path,
+                partition="validation",
+                seed=int(seed),
+                cache_size=options.cache_size,
+            )
+            _, diagnostics = _validate(model, validation, options, device)
+            failures = sparse_acceptance(
+                diagnostics, target_zero_fraction=model_config.target_zero_fraction
+            )
+            if failures:
+                raise RuntimeError(f"Adapted sparse checkpoint failed collapse gates: {failures}")
+            adapted.mkdir(parents=True, exist_ok=False)
+            write_json_atomic(adapted / "compatibility.json", asdict(adapted_expected))
+            for role in ("latest", "best", "final"):
+                manifest = replace(
+                    base_manifest,
+                    checkpoint_id=f"{fold_id}-sparse-adapted-{seed}-{role}",
+                    weights_sha256="",
+                    checkpoint_role=role,
+                    adaptation="difficulty-v1",
+                    training_config_hash=adapted_hash,
+                    validation_diagnostics=tuple(sorted(diagnostics.items())),
+                )
+                save_checkpoint(model, adapted / role, manifest)
+            results.append({"fold_id": fold_id, "seed": seed, "steps": steps})
+    return results
+
+
+def run_authorized_stages(
+    config: PaperRunConfig,
+    *,
+    network_cli_enabled: bool,
+    training_cli_enabled: bool,
+    full_run_cli_enabled: bool,
+    trusted_local_resume: bool = False,
+) -> dict[str, object]:
+    """Resume idempotently through stages whose separate authorizations are present."""
+    results: dict[str, object] = {}
+    universe = Path(config.data["universe_manifest"])
+    formation_root = Path(config.data["formation_corpus_root"])
+    target_root = Path(config.data["target_corpus_root"])
+    if not universe.is_file() and not _has_parquet_corpus(formation_root):
+        if config.allow_network:
+            results["download_data"] = download_data_stage(config, cli_enabled=network_cli_enabled)
+        else:
+            results["download_data"] = "DATA NOT ACQUIRED"
+            return results
+    if not universe.is_file():
+        results["build_universe"] = build_universe_stage(config)
+    else:
+        results["build_universe"] = "reused"
+    if config.allow_network and "download_data" not in results:
+        results["download_data"] = download_data_stage(config, cli_enabled=network_cli_enabled)
+    elif not _has_parquet_corpus(target_root):
+        results["download_data"] = "DATA NOT ACQUIRED"
+        return results
+    results["validate_data"] = validate_data_stage(config)
+    sequence_root = config.artifact_root / "sequences"
+    expected_manifests = [
+        sequence_root / str(fold["id"]) / "sequence-manifest.json"
+        for fold in config.evaluation["folds"]
+    ]
+    if not all(path.is_file() for path in expected_manifests):
+        results["build_sequences"] = build_sequences_stage(config)
+    else:
+        results["build_sequences"] = "reused"
+    results["validate_sequences"] = validate_sequences_stage(config)
+    from execsim.ml.paper.benchmark import estimate_manifest_resources
+
+    results["resource_plan"] = estimate_manifest_resources(
+        tuple(expected_manifests),
+        batch_size=int(config.representation["batch_size"]),
+        max_epochs=int(config.representation["max_epochs"]),
+        bounds={
+            str(name): int(value)
+            for name, value in config.representation["safe_resource_bounds"].items()
+        },
+    )
+    if config.allow_historical_training:
+        if not training_cli_enabled:
+            raise PermissionError("Paper run requires --enable-historical-training.")
+        selection_receipt = config.artifact_root / "selection" / "rdm-lambda.json"
+        if not selection_receipt.is_file():
+            results["select_rdm_lambda"] = select_rdm_lambda_stage(
+                config,
+                allow_historical_training=True,
+                trusted_local_resume=trusted_local_resume,
+            )
+        else:
+            results["select_rdm_lambda"] = "reused"
+        results["train_representations"] = train_representations_stage(
+            config,
+            allow_historical_training=True,
+            trusted_local_resume=trusted_local_resume,
+        )
+        results["export_embeddings"] = export_embeddings_stage(config)
+        results["train_volume_models"] = train_volume_models_stage(
+            config, allow_historical_training=True
+        )
+    else:
+        results["training"] = "TRAINING NOT RUN"
+    if config.allow_full_paper_run:
+        if not full_run_cli_enabled:
+            raise PermissionError("Paper run requires --enable-full-paper-run.")
+        results["evaluate_forecast"] = evaluate_forecasts_stage(config)
+        results["evaluate_representation"] = evaluate_representations_stage(config)
+        results["run_tca"] = run_tca_stage(config)
+        results["report"] = report_stage(config)
+    else:
+        results["evaluation"] = "EMPIRICAL RESULT NOT AVAILABLE"
+    return results
+
+
+def _assert_representation_reuse(
+    expected: Any,
+    representation: Any,
+    identity: Any,
+    sequence_path: Path,
+    options: Any,
+    common_rdm_lambda: float,
+) -> None:
+    """Reject a completed representation directory whose current run identity changed."""
+    import torch
+
+    training_hash = stable_hash(
+        {
+            "representation": asdict(representation),
+            "trainer": asdict(options),
+            "common_rdm_lambda": common_rdm_lambda,
+        }
+    )
+    p, mu, sigma = representation.target_parameters
+    exact = {
+        "geometry": representation.geometry,
+        "predictor_family": representation.predictor_family,
+        "fold_id": identity.fold_id,
+        "cutoff": identity.cutoff,
+        "universe_manifest_hash": identity.universe_manifest_hash,
+        "dataset_manifest_hash": identity.dataset_manifest_hash,
+        "sequence_manifest_hash": file_sha256(sequence_path),
+        "normalization_hash": identity.normalization_hash,
+        "architecture_hash": identity.architecture_hash,
+        "training_config_hash": training_hash,
+        "paper_config_hash": identity.config_hash,
+        "rdm_projections": representation.rdm_projections_train,
+        "calibrated_rdm_lambda": common_rdm_lambda,
+        "adaptation": "none",
+    }
+    mismatches = [name for name, value in exact.items() if getattr(expected, name) != value]
+    floating = {
+        "generalized_gaussian_p": p,
+        "generalized_gaussian_mu": mu,
+        "generalized_gaussian_sigma": sigma,
+        "target_rms": representation.target_rms,
+        "target_zero_fraction": representation.target_zero_fraction,
+    }
+    mismatches.extend(
+        name
+        for name, value in floating.items()
+        if not np.isclose(getattr(expected, name), value, rtol=0, atol=1e-12)
+    )
+    current_torch = str(torch.__version__)
+    if expected.torch_compatibility == "exact":
+        torch_matches = expected.torch_version == current_torch
+    else:
+        torch_matches = expected.torch_version.split(".")[:2] == current_torch.split(".")[:2]
+    if not torch_matches:
+        mismatches.append("torch_version")
+    if mismatches:
+        raise ValueError(f"Reusable representation identity mismatch: {sorted(mismatches)}")
+
+
+def _validate_embedding_reuse(
+    output: Path,
+    *,
+    expected: Any,
+    sequence_path: Path,
+    checkpoint_directory: Path,
+    seed: int,
+    geometry: str,
+    adaptation: str,
+) -> None:
+    """Validate every identity and checksum before reusing an embedding corpus."""
+    checkpoint = read_json(checkpoint_directory / "manifest.json")
+    payload = read_json(output / "manifest.json")
+    exact = {
+        "fold_id": expected.fold_id,
+        "seed": seed,
+        "geometry": geometry,
+        "adaptation": adaptation,
+        "checkpoint_hash": checkpoint["weights_sha256"],
+        "checkpoint_manifest_hash": file_sha256(checkpoint_directory / "manifest.json"),
+        "sequence_manifest_hash": file_sha256(sequence_path),
+        "normalization_hash": expected.normalization_hash,
+        "paper_config_hash": expected.paper_config_hash,
+        "training_cutoff": expected.cutoff,
+        "pytorch_compatibility": expected.torch_compatibility,
+    }
+    mismatches = [name for name, value in exact.items() if payload.get(name) != value]
+    files = payload.get("files")
+    if not isinstance(files, list) or {item.get("partition") for item in files} != {
+        "train",
+        "validation",
+        "test",
+    }:
+        mismatches.append("files")
+    else:
+        for item in files:
+            path = output / str(item["path"])
+            if not path.is_file() or file_sha256(path) != item.get("sha256"):
+                mismatches.append(f"file:{item.get('partition')}")
+    if mismatches:
+        raise ValueError(f"Reusable embedding identity mismatch: {sorted(mismatches)}")
+
+
+def _acquire_period(
+    instrument_ids: tuple[str, ...],
+    intervals: tuple[InstrumentSymbolInterval, ...],
+    *,
+    start: date,
+    end: date,
+    output: Path,
+    fetcher: Any,
+    data: Any,
+    acquire_chunk: Any,
+    monthly_chunks: Any,
+) -> int:
+    """Acquire every sourced symbol interval after proving trading-session coverage."""
+    import exchange_calendars as xcals
+
+    calendar = xcals.get_calendar("XNYS")
+    sessions = tuple(value.date() for value in calendar.sessions_in_range(start, end))
+    completed = 0
+    for instrument_id in instrument_ids:
+        for session_date in sessions:
+            resolve_provider_symbol(intervals, instrument_id, session_date)
+        history = sorted(
+            (item for item in intervals if item.instrument_id == instrument_id),
+            key=lambda item: item.start,
+        )
+        for interval in history:
+            interval_start = max(interval.start, start)
+            interval_end = min(interval.end, end)
+            if interval_start > interval_end:
+                continue
+            for chunk in monthly_chunks(
+                instrument_id, interval.symbol, interval_start, interval_end
+            ):
+                acquire_chunk(
+                    chunk,
+                    output_directory=output,
+                    fetch=fetcher,
+                    config=data,
+                    cli_enabled=True,
+                )
+                completed += 1
+    return completed
+
+
+def _load_parquet_corpus(path: Path) -> pd.DataFrame:
+    if path.is_file():
+        return pd.read_parquet(path)
+    files = sorted(path.rglob("*.parquet")) + sorted(path.rglob("*.response"))
+    if not files:
+        raise RuntimeError(f"BLOCKED: no Parquet corpus files found under {path}")
+    frames = []
+    for file in files:
+        try:
+            frames.append(pd.read_parquet(file))
+        except Exception as exc:
+            raise ValueError(f"Corpus artifact is not valid Parquet: {file}") from exc
+    return pd.concat(frames, ignore_index=True)
+
+
+def _has_parquet_corpus(path: Path) -> bool:
+    """Return whether a file/root contains at least one candidate corpus artifact."""
+    if path.is_file():
+        return True
+    return path.is_dir() and (
+        next(path.rglob("*.parquet"), None) is not None
+        or next(path.rglob("*.response"), None) is not None
+    )
+
+
+def _as_date(value: object) -> date:
+    """Normalize YAML date scalars and ISO strings."""
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value))
+
+
+def _symbol_intervals(frame: pd.DataFrame) -> tuple[InstrumentSymbolInterval, ...]:
+    required = {"instrument_id", "symbol", "start", "end", "source"}
+    if missing := required.difference(frame.columns):
+        raise ValueError(f"Ticker-history source missing columns: {sorted(missing)}")
+    return tuple(
+        InstrumentSymbolInterval(
+            str(row.instrument_id),
+            str(row.symbol).upper(),
+            date.fromisoformat(str(row.start)[:10]),
+            date.fromisoformat(str(row.end)[:10]),
+            str(row.source),
+        )
+        for row in frame.itertuples(index=False)
+    )
+
+
+def _git_head() -> str:
+    import subprocess
+
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    )
+    return completed.stdout.strip()
+
+
+def _require_parameter_freeze(config: PaperRunConfig) -> dict[str, object]:
+    """Fail closed before any locked-test stage unless validation selections are frozen."""
+    path = config.artifact_root / "selection" / "parameter-freeze-v1.json"
+    if not path.is_file():
+        raise RuntimeError(
+            "BLOCKED: parameter-selection freeze is missing; locked test artifacts cannot be read."
+        )
+    payload = read_json(path)
+    if (
+        payload.get("status") != "PARAMETERS_FROZEN"
+        or payload.get("paper_config_hash") != config.config_hash
+        or payload.get("test_or_tca_used") is not False
+        or payload.get("git_commit") != _git_head()
+    ):
+        raise ValueError("Parameter-selection freeze is incompatible with this paper run.")
+    receipt = config.artifact_root / "selection" / "rdm-lambda.json"
+    if not receipt.is_file() or file_sha256(receipt) != payload.get("rdm_lambda_receipt_sha256"):
+        raise ValueError("Parameter-selection freeze RDM receipt checksum mismatch.")
+    selection = _load_common_lambda_receipt(config)
+    if (
+        selection.get("paper_config_hash") != config.config_hash
+        or selection.get("selected_rdm_lambda") != payload.get("selected_rdm_lambda")
+        or selection.get("test_or_tca_used") is not False
+    ):
+        raise ValueError("Parameter-selection freeze RDM receipt identity mismatch.")
+    records = payload.get("lightgbm_manifests", [])
+    expected_paths = {
+        (
+            Path("lightgbm")
+            / str(fold["id"])
+            / method
+            / str(seed if seed is not None else "shared")
+            / "manifest.json"
+        ).as_posix()
+        for fold in config.evaluation["folds"]
+        for method, seed in (
+            ("raw", None),
+            ("untrained_neural", None),
+            *(
+                (geometry, int(seed))
+                for geometry in ("dense", "sparse")
+                for seed in config.representation["seeds"]
+            ),
+        )
+    }
+    recorded_paths = [str(record.get("path")) for record in records]
+    if len(recorded_paths) != len(expected_paths) or set(recorded_paths) != expected_paths:
+        raise ValueError("Parameter-selection freeze LightGBM matrix is incomplete or duplicated.")
+    for record in records:
+        artifact = config.artifact_root / str(record["path"])
+        if not artifact.is_file() or file_sha256(artifact) != record.get("sha256"):
+            raise ValueError("Parameter-selection freeze LightGBM checksum mismatch.")
+    return payload
+
+
+def _load_common_lambda_receipt(config: PaperRunConfig) -> dict[str, object]:
+    """Recompute and verify the complete validation-only common-lambda decision."""
+    from execsim.ml.representations.selection import (
+        CommonLambdaCandidate,
+        select_common_rdm_lambda,
+    )
+
+    path = config.artifact_root / "selection" / "rdm-lambda.json"
+    payload = read_json(path)
+    if (
+        payload.get("schema_version") != "paper-rdm-lambda-selection-v1"
+        or payload.get("paper_config_hash") != config.config_hash
+        or payload.get("selection_partition") != "fold-1/validation"
+        or payload.get("seed") != 13
+        or payload.get("test_or_tca_used") is not False
+    ):
+        raise ValueError("Common RDM lambda receipt identity is incompatible.")
+    try:
+        candidates = tuple(CommonLambdaCandidate(**row) for row in payload["candidates"])
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Common RDM lambda receipt candidate matrix is malformed.") from exc
+    selected = select_common_rdm_lambda(candidates)
+    if float(payload.get("selected_rdm_lambda", -1)) != selected:
+        raise ValueError("Common RDM lambda receipt does not reproduce its selection.")
+    return payload
+
+
+def _latest_periodic_checkpoint(output_root: Path) -> Path | None:
+    """Return the highest complete periodic step for deterministic local continuation."""
+    periodic = output_root / "periodic"
+    if not periodic.is_dir():
+        return None
+    candidates = [
+        path
+        for path in sorted(periodic.glob("step=*"))
+        if (path / "weights" / "manifest.json").is_file()
+        and (path / "weights" / "model.safetensors").is_file()
+        and (path / "resume.pt").is_file()
+        and (path / "resume.sha256").is_file()
+    ]
+    return candidates[-1] if candidates else None
+
+
+def _append_untrained_control(
+    values: tuple[pd.DataFrame, Any, pd.DataFrame, Any], *, fold_seed: int
+) -> tuple[pd.DataFrame, Any, pd.DataFrame, Any]:
+    """Append the frozen nonlinear, target-free neural placebo by stable case identity."""
+    from execsim.ml.paper.features import append_untrained_neural_control_frames
+
+    return append_untrained_neural_control_frames(values, fold_seed=fold_seed)
+
+
+def _grouped_support_transitions(
+    group_ids: np.ndarray, latents: np.ndarray, labels: np.ndarray
+) -> dict[str, object]:
+    from execsim.ml.representations.diagnostics import support_transition_diagnostics
+
+    results = []
+    for group_id in np.unique(group_ids):
+        selected = group_ids == group_id
+        if selected.sum() >= 2:
+            results.append(support_transition_diagnostics(latents[selected], labels[selected]))
+    if not results:
+        raise ValueError("Support diagnostics require consecutive rows within an instrument.")
+    regime_values: dict[str, list[float]] = {}
+    matrix: dict[str, dict[str, int]] = {}
+    support_state_matrix = {
+        "inactive_to_inactive": 0,
+        "inactive_to_active": 0,
+        "active_to_inactive": 0,
+        "active_to_active": 0,
+    }
+    for result in results:
+        per_regime = result["per_regime_support_jaccard"]
+        transitions = result["regime_transition_matrix"]
+        if not isinstance(per_regime, dict) or not isinstance(transitions, dict):
+            raise TypeError("Support transition diagnostics have an invalid mapping shape.")
+        for regime, value in per_regime.items():
+            regime_values.setdefault(regime, []).append(float(value))
+        for source, targets in transitions.items():
+            if not isinstance(targets, dict):
+                raise TypeError("Regime transition row must be a mapping.")
+            for target, count in targets.items():
+                matrix.setdefault(source, {})[target] = matrix.setdefault(source, {}).get(
+                    target, 0
+                ) + int(count)
+        dimension_transitions = result["support_state_transition_matrix"]
+        if not isinstance(dimension_transitions, dict):
+            raise TypeError("Support state transition matrix must be a mapping.")
+        for name in support_state_matrix:
+            support_state_matrix[name] += int(dimension_transitions[name])
+    return {
+        "mean_consecutive_support_jaccard": float(
+            np.mean([result["mean_consecutive_support_jaccard"] for result in results])
+        ),
+        "support_transition_rate": float(
+            np.mean([result["support_transition_rate"] for result in results])
+        ),
+        "chance_support_jaccard": float(
+            np.mean([result["chance_support_jaccard"] for result in results])
+        ),
+        "support_state_transition_matrix": support_state_matrix,
+        "per_regime_support_jaccard": {
+            regime: float(np.mean(values)) for regime, values in regime_values.items()
+        },
+        "regime_transition_matrix": matrix,
+    }
+
+
+def _causal_adv20(bars: pd.DataFrame) -> pd.DataFrame:
+    frame = bars.copy()
+    frame["session_date"] = (
+        pd.to_datetime(frame["timestamp"]).dt.tz_convert("America/New_York").dt.date
+    )
+    daily = (
+        frame.groupby(["instrument_id", "session_date"], sort=True, as_index=False)["volume"]
+        .sum()
+        .sort_values(["instrument_id", "session_date"], kind="stable")
+    )
+    daily["adv20"] = daily.groupby("instrument_id", sort=False)["volume"].transform(
+        lambda values: values.shift(1).rolling(20, min_periods=20).mean()
+    )
+    return daily.dropna(subset=["adv20"])
+
+
+def _within_token_profile(
+    bars: pd.DataFrame, instrument_id: str, training_cutoff: date
+) -> np.ndarray:
+    selected = bars.loc[
+        (bars["instrument_id"].astype(str) == instrument_id)
+        & (
+            pd.to_datetime(bars["timestamp"]).dt.tz_convert("America/New_York").dt.date
+            <= training_cutoff
+        )
+    ].copy()
+    if selected.empty:
+        raise ValueError(
+            f"No TRAIN-only within-token history for {instrument_id}/{training_cutoff}."
+        )
+    local = pd.to_datetime(selected["timestamp"]).dt.tz_convert("America/New_York")
+    selected["minute_in_token"] = ((local.dt.hour * 60 + local.dt.minute) - 570) % 15
+    profile = selected.groupby("minute_in_token", sort=True)["volume"].mean().reindex(range(15))
+    values = profile.to_numpy(dtype=float)
+    if not np.isfinite(values).all() or values.sum() <= 0:
+        raise ValueError("Within-token profile is incomplete or non-positive.")
+    return values / values.sum()
+
+
+def _feature_resolver(scale: pd.DataFrame, shape: pd.DataFrame, instrument_id: str) -> Any:
+    def resolve(
+        symbol: str,
+        session_date: date,
+        generated_at: pd.Timestamp,
+        observations: pd.DataFrame | None,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        del symbol, observations
+        local = generated_at.tz_convert("America/New_York")
+        as_of = ((local.hour * 60 + local.minute) - 570) // 15
+        selected = scale.loc[
+            (scale["instrument_id"].astype(str) == instrument_id)
+            & (scale["session_date"].astype(str) == session_date.isoformat())
+            & (scale["as_of"].astype(int) == as_of)
+        ]
+        if len(selected) != 1:
+            raise ValueError(
+                f"No unique frozen LightGBM row for {instrument_id}/{session_date}/{as_of}."
+            )
+        case_id = str(selected["sample_id"].iloc[0])
+        selected_shape = shape.loc[shape["case_id"].astype(str) == case_id]
+        if selected_shape.empty:
+            raise ValueError(f"No frozen shape rows for LightGBM case {case_id}.")
+        return selected, selected_shape
+
+    return resolve

@@ -1,0 +1,16 @@
+{
+  "as_of": "2021-01-04",
+  "formation_end": "2021-12-31",
+  "formation_start": "2021-01-04",
+  "members": [],
+  "selection": {
+    "completeness_minimum": 0.95,
+    "ranking": "median_daily_dollar_volume_desc_then_instrument_id",
+    "security_type": "ordinary_common_stock",
+    "snapshot": "sp500_as_of_2021-01-04",
+    "unadjusted_median_price_minimum_usd": 5.0
+  },
+  "status": "NOT RUN",
+  "target_size": 100,
+  "warning": "Formation data acquisition and universe construction require separate authorization."
+}

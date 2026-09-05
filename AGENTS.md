@@ -27,6 +27,8 @@ When sources disagree, do not silently choose the convenient interpretation. Rec
 - Do not delete, skip, weaken, or narrow tests to make a gate pass.
 - Preserve deterministic ordering, seeds, hashes, integer reconciliation, and artifact provenance.
 - Never train an ML model on the repository's real historical data unless the user separately authorizes that action. Tiny synthetic test fits are allowed.
+- Treat paper data acquisition, historical representation or LightGBM fitting, and the full paper evaluation as three separate privileged operations. Each requires its matching configuration switch and command-line enable flag; a dry run or synthetic fixture never grants that authority.
+- Preserve the paper boundary in `docs/PAPER_DESIGN.md`: learned components may emit only point-in-time `VolumeForecast` inputs and cannot select trades, relax constraints, consume actual future tokens at inference, or alter replay and cost mathematics.
 
 ## Standard checks
 
